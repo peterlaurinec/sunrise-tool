@@ -203,8 +203,10 @@ header p {
   border-color: var(--text);
 }
 
-.day-cell.visible { background: var(--gold); }
-.day-cell.blocked { background: var(--red); }
+.day-cell.clear { background: var(--gold); }
+.day-cell.short-delay { background: #c87a20; }
+.day-cell.medium-delay { background: #b85c1a; }
+.day-cell.long-delay { background: var(--red); }
 .day-cell.no-sunrise { background: var(--gray); }
 .day-cell.empty { background: transparent; cursor: default; }
 .day-cell.empty:hover { transform: none; }
@@ -320,8 +322,10 @@ header p {
     <div id="calendar-placeholder" class="placeholder">Click the map to begin</div>
     <div id="calendar-content" style="display:none;">
       <div class="legend">
-        <div class="legend-item"><div class="legend-swatch" style="background:var(--gold)"></div> Visible</div>
-        <div class="legend-item"><div class="legend-swatch" style="background:var(--red)"></div> Blocked by terrain</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:var(--gold)"></div> Clear horizon (&lt;5 min)</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#c87a20"></div> Short delay (5–15 min)</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#b85c1a"></div> Medium delay (15–30 min)</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:var(--red)"></div> Long delay (&gt;30 min)</div>
         <div class="legend-item"><div class="legend-swatch" style="background:var(--gray)"></div> No sunrise</div>
       </div>
       <div class="calendar-grid" id="calendar-grid"></div>
@@ -430,6 +434,27 @@ function getHorizonAngleAtAzimuth(profile, azimuth) {
   const hi = (lo + 1) % 36;
   const frac = idx - Math.floor(idx);
   return profile[lo].angle * (1 - frac) + profile[hi].angle * frac;
+}
+
+// Sun's altitude rate at sunrise (degrees per minute)
+// At sunrise, dAlt/dt = (2*pi/1440) * cos(decl) * sin(hourAngleSunrise) in radians/min
+// converted to degrees/min
+function sunElevationRateAtSunrise(dayOfYr, latDeg) {
+  const decl = solarDeclination(dayOfYr) * DEG;
+  const lat = latDeg * DEG;
+  const cosHA = -Math.tan(lat) * Math.tan(decl);
+  if (cosHA < -1 || cosHA > 1) return 0;
+  const sinHA = Math.sqrt(1 - cosHA * cosHA);
+  // 2*pi/1440 = 0.004363 rad/min (Earth rotation rate)
+  return (0.004363 * Math.cos(decl) * sinHA) * RAD;
+}
+
+// Minutes after astronomical sunrise until sun clears terrain
+function delayMinutes(terrainAngle, dayOfYr, latDeg) {
+  if (terrainAngle <= 0) return 0;
+  const rate = sunElevationRateAtSunrise(dayOfYr, latDeg);
+  if (rate <= 0) return 999;
+  return terrainAngle / rate;
 }
 
 let azimuthChart = null;
@@ -557,7 +582,9 @@ function renderHorizonChart(profile, minAz, maxAz) {
   const colors = profile.map(p => {
     const b = p.bearing;
     if (minAz !== null && maxAz !== null && b >= minAz - 5 && b <= maxAz + 5) {
-      return p.angle > 0.5 ? 'rgba(232, 72, 72, 0.8)' : 'rgba(232, 168, 56, 0.8)';
+      if (p.angle > 3) return 'rgba(232, 72, 72, 0.8)';
+      if (p.angle > 1) return 'rgba(184, 92, 26, 0.8)';
+      return 'rgba(232, 168, 56, 0.8)';
     }
     return 'rgba(74, 85, 104, 0.5)';
   });
@@ -664,19 +691,16 @@ function renderCalendar(lat, profile) {
       const cell = document.createElement('div');
       cell.className = 'day-cell';
 
-      let status, horizAngle = null;
+      let horizAngle = null, delay = 0;
       if (az === null) {
-        status = 'no-sunrise';
         cell.classList.add('no-sunrise');
       } else {
         horizAngle = getHorizonAngleAtAzimuth(profile, az);
-        if (horizAngle > 0.5) {
-          status = 'blocked';
-          cell.classList.add('blocked');
-        } else {
-          status = 'visible';
-          cell.classList.add('visible');
-        }
+        delay = delayMinutes(horizAngle, doy, lat);
+        if (delay < 5) cell.classList.add('clear');
+        else if (delay < 15) cell.classList.add('short-delay');
+        else if (delay < 30) cell.classList.add('medium-delay');
+        else cell.classList.add('long-delay');
       }
 
       cell.addEventListener('mouseenter', (e) => {
@@ -687,9 +711,14 @@ function renderCalendar(lat, profile) {
         } else {
           html += 'Azimuth: ' + az.toFixed(1) + '\u00B0<br>';
           html += 'Terrain angle: ' + horizAngle.toFixed(2) + '\u00B0<br>';
-          html += status === 'visible'
-            ? '<span style="color:var(--gold)">Sunrise visible</span>'
-            : '<span style="color:var(--red)">Blocked by terrain</span>';
+          if (delay < 1) {
+            html += '<span style="color:var(--gold)">Sun visible at sunrise</span>';
+          } else {
+            html += 'Sun clears terrain <strong>' + Math.round(delay) + ' min</strong> after sunrise<br>';
+            if (delay < 15) html += '<span style="color:var(--gold)">Short wait</span>';
+            else if (delay < 30) html += '<span style="color:#b85c1a">Moderate wait</span>';
+            else html += '<span style="color:var(--red)">Long wait (' + Math.round(delay) + ' min)</span>';
+          }
         }
         tip.innerHTML = html;
         tip.style.display = 'block';
@@ -718,23 +747,33 @@ function renderSummary(lat, profile) {
   const card = document.getElementById('summary-card');
   card.style.display = 'block';
 
-  let visibleDays = 0, blockedDays = 0, noSunrise = 0;
+  let clearDays = 0, shortDays = 0, medDays = 0, longDays = 0, noSunrise = 0;
+  let totalDelay = 0, sunriseDays = 0, minDelay = 999, maxDelay = 0;
   for (let d = 1; d <= 365; d++) {
     const az = sunriseAzimuth(d, lat);
     if (az === null) { noSunrise++; continue; }
     const ha = getHorizonAngleAtAzimuth(profile, az);
-    if (ha > 0.5) blockedDays++;
-    else visibleDays++;
+    const dl = delayMinutes(ha, d, lat);
+    sunriseDays++;
+    totalDelay += dl;
+    minDelay = Math.min(minDelay, dl);
+    maxDelay = Math.max(maxDelay, dl);
+    if (dl < 5) clearDays++;
+    else if (dl < 15) shortDays++;
+    else if (dl < 30) medDays++;
+    else longDays++;
   }
 
-  const pct = ((visibleDays / 365) * 100).toFixed(0);
+  const avgDelay = sunriseDays > 0 ? (totalDelay / sunriseDays) : 0;
   document.getElementById('summary-content').innerHTML =
     '<div style="display:flex;gap:2rem;flex-wrap:wrap;font-size:0.95rem;">' +
-      '<div><span style="color:var(--gold);font-size:1.8rem;font-family:Playfair Display,serif;font-weight:700;">' + pct + '%</span><br><span style="color:var(--text-dim)">of days visible</span></div>' +
-      '<div><span style="color:var(--gold);font-size:1.4rem;font-weight:700;">' + visibleDays + '</span><br><span style="color:var(--text-dim)">visible days</span></div>' +
-      '<div><span style="color:var(--red);font-size:1.4rem;font-weight:700;">' + blockedDays + '</span><br><span style="color:var(--text-dim)">blocked days</span></div>' +
+      '<div><span style="color:var(--gold);font-size:1.8rem;font-family:Playfair Display,serif;font-weight:700;">' + Math.round(avgDelay) + ' min</span><br><span style="color:var(--text-dim)">avg delay after sunrise</span></div>' +
+      '<div><span style="color:var(--gold);font-size:1.4rem;font-weight:700;">' + Math.round(minDelay) + '–' + Math.round(maxDelay) + ' min</span><br><span style="color:var(--text-dim)">delay range</span></div>' +
+      '<div><span style="color:var(--gold);font-size:1.4rem;font-weight:700;">' + clearDays + '</span><br><span style="color:var(--text-dim)">clear days (&lt;5m)</span></div>' +
+      '<div><span style="color:#c87a20;font-size:1.4rem;font-weight:700;">' + shortDays + '</span><br><span style="color:var(--text-dim)">short delay (5–15m)</span></div>' +
+      '<div><span style="color:#b85c1a;font-size:1.4rem;font-weight:700;">' + medDays + '</span><br><span style="color:var(--text-dim)">medium (15–30m)</span></div>' +
+      '<div><span style="color:var(--red);font-size:1.4rem;font-weight:700;">' + longDays + '</span><br><span style="color:var(--text-dim)">long delay (&gt;30m)</span></div>' +
       (noSunrise > 0 ? '<div><span style="color:var(--gray);font-size:1.4rem;font-weight:700;">' + noSunrise + '</span><br><span style="color:var(--text-dim)">no sunrise</span></div>' : '') +
-      '<div><span style="font-size:1.1rem;">' + lat.toFixed(4) + '\u00B0</span><br><span style="color:var(--text-dim)">latitude</span></div>' +
     '</div>';
 }
 
