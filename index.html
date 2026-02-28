@@ -1,1 +1,779 @@
-<\!DOCTYPE html><html><body><h1>sunrise-tool</h1></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sunrise Tool — Can You See the Sunrise?</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-primary: #0f1729;
+  --bg-secondary: #1a2332;
+  --bg-card: #1e2a3a;
+  --gold: #e8a838;
+  --gold-light: #f5c842;
+  --gold-dim: rgba(232, 168, 56, 0.15);
+  --red: #e84848;
+  --red-dim: rgba(232, 72, 72, 0.15);
+  --gray: #4a5568;
+  --text: #e2e8f0;
+  --text-dim: #8896a8;
+  --border: #2d3a4d;
+}
+
+body {
+  font-family: 'DM Sans', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+h1, h2, h3 { font-family: 'Playfair Display', serif; }
+
+header {
+  text-align: center;
+  padding: 2rem 1rem 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+header h1 {
+  font-size: 2.2rem;
+  background: linear-gradient(135deg, var(--gold-light), var(--gold), #d4892a);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+header p {
+  color: var(--text-dim);
+  margin-top: 0.4rem;
+  font-size: 0.95rem;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 1.5rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1.5rem;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1.25rem;
+  position: relative;
+}
+
+.card h2 {
+  font-size: 1.15rem;
+  color: var(--gold);
+  margin-bottom: 1rem;
+}
+
+.card.full-width {
+  grid-column: 1 / -1;
+}
+
+#map {
+  height: 350px;
+  border-radius: 8px;
+  z-index: 1;
+}
+
+.coords-bar {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.coords-bar label {
+  color: var(--text-dim);
+  font-size: 0.85rem;
+}
+
+.coords-bar input {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  width: 120px;
+  font-size: 0.9rem;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.coords-bar button {
+  background: var(--gold);
+  color: var(--bg-primary);
+  border: none;
+  padding: 0.45rem 1rem;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 700;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.85rem;
+  transition: background 0.2s;
+}
+
+.coords-bar button:hover { background: var(--gold-light); }
+
+.loading-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 41, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 12px;
+  z-index: 5;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+
+.loading-overlay.active {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.spinner {
+  width: 36px;
+  height: 36px;
+  border: 3px solid var(--border);
+  border-top-color: var(--gold);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  margin-right: 0.75rem;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.loading-text { color: var(--gold); font-weight: 500; }
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 300px;
+}
+
+.calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+.month-block h3 {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  margin-bottom: 0.35rem;
+  font-family: 'DM Sans', sans-serif;
+  font-weight: 500;
+}
+
+.month-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.day-cell {
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 3px;
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.15s;
+  border: 1px solid transparent;
+}
+
+.day-cell:hover {
+  transform: scale(1.5);
+  z-index: 2;
+  border-color: var(--text);
+}
+
+.day-cell.visible { background: var(--gold); }
+.day-cell.blocked { background: var(--red); }
+.day-cell.no-sunrise { background: var(--gray); }
+.day-cell.empty { background: transparent; cursor: default; }
+.day-cell.empty:hover { transform: none; }
+
+#tooltip {
+  position: fixed;
+  background: var(--bg-secondary);
+  border: 1px solid var(--gold);
+  color: var(--text);
+  padding: 0.6rem 0.85rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  pointer-events: none;
+  z-index: 100;
+  display: none;
+  max-width: 240px;
+  line-height: 1.5;
+}
+
+.legend {
+  display: flex;
+  gap: 1.25rem;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.legend-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 3px;
+}
+
+.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+@media (max-width: 900px) {
+  .container { grid-template-columns: 1fr; }
+  .calendar-grid { grid-template-columns: repeat(3, 1fr); }
+}
+
+@media (max-width: 500px) {
+  .calendar-grid { grid-template-columns: repeat(2, 1fr); }
+  header h1 { font-size: 1.6rem; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Sunrise Tool</h1>
+  <p>Click the map to see if you can watch the sunrise from any location</p>
+</header>
+
+<div class="container">
+  <div class="card">
+    <h2>Location</h2>
+    <div id="map"></div>
+    <div class="coords-bar">
+      <label>Lat</label>
+      <input type="number" id="lat-input" step="0.0001" placeholder="48.8566">
+      <label>Lng</label>
+      <input type="number" id="lng-input" step="0.0001" placeholder="2.3522">
+      <button id="go-btn">Go</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Sunrise Azimuth — Full Year</h2>
+    <div class="loading-overlay" id="azimuth-loading">
+      <div class="spinner"></div><span class="loading-text">Calculating...</span>
+    </div>
+    <div id="azimuth-placeholder" class="placeholder">Click the map to begin</div>
+    <div class="chart-container" id="azimuth-chart-wrap" style="display:none;">
+      <canvas id="azimuth-chart"></canvas>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Horizon Obstruction Profile</h2>
+    <div class="loading-overlay" id="horizon-loading">
+      <div class="spinner"></div><span class="loading-text">Fetching elevation data...</span>
+    </div>
+    <div id="horizon-placeholder" class="placeholder">Click the map to begin</div>
+    <div class="chart-container" id="horizon-chart-wrap" style="display:none;">
+      <canvas id="horizon-chart"></canvas>
+    </div>
+  </div>
+
+  <div class="card" id="summary-card" style="display:none;">
+    <h2>Summary</h2>
+    <div id="summary-content"></div>
+  </div>
+
+  <div class="card full-width">
+    <h2>Sunrise Visibility Calendar</h2>
+    <div class="loading-overlay" id="calendar-loading">
+      <div class="spinner"></div><span class="loading-text">Building calendar...</span>
+    </div>
+    <div id="calendar-placeholder" class="placeholder">Click the map to begin</div>
+    <div id="calendar-content" style="display:none;">
+      <div class="legend">
+        <div class="legend-item"><div class="legend-swatch" style="background:var(--gold)"></div> Visible</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:var(--red)"></div> Blocked by terrain</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:var(--gray)"></div> No sunrise</div>
+      </div>
+      <div class="calendar-grid" id="calendar-grid"></div>
+    </div>
+  </div>
+</div>
+
+<div id="tooltip"></div>
+
+<script>
+const map = L.map('map').setView([48.85, 2.35], 4);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '&copy; OpenStreetMap contributors',
+  maxZoom: 18
+}).addTo(map);
+
+let marker = null;
+const latInput = document.getElementById('lat-input');
+const lngInput = document.getElementById('lng-input');
+
+function setLocation(lat, lng) {
+  lat = parseFloat(lat); lng = parseFloat(lng);
+  if (isNaN(lat) || isNaN(lng)) return;
+  latInput.value = lat.toFixed(4);
+  lngInput.value = lng.toFixed(4);
+  if (marker) marker.setLatLng([lat, lng]);
+  else marker = L.marker([lat, lng]).addTo(map);
+  map.setView([lat, lng], Math.max(map.getZoom(), 10));
+  runAnalysis(lat, lng);
+}
+
+map.on('click', e => setLocation(e.latlng.lat, e.latlng.lng));
+document.getElementById('go-btn').addEventListener('click', () => {
+  setLocation(latInput.value, lngInput.value);
+});
+
+const DEG = Math.PI / 180;
+const RAD = 180 / Math.PI;
+
+function solarDeclination(dayOfYear) {
+  return -23.45 * Math.cos((360 / 365) * (dayOfYear + 10) * DEG);
+}
+
+function sunriseAzimuth(dayOfYear, latDeg) {
+  const decl = solarDeclination(dayOfYear);
+  const latRad = latDeg * DEG;
+  const declRad = decl * DEG;
+  const cosA = Math.sin(declRad) / Math.cos(latRad);
+  if (cosA < -1 || cosA > 1) return null;
+  return Math.acos(cosA) * RAD;
+}
+
+function dayOfYear(month, day) {
+  const d = new Date(2025, month, day);
+  const start = new Date(2025, 0, 1);
+  return Math.floor((d - start) / 86400000) + 1;
+}
+
+function daysInMonth(m) {
+  return new Date(2025, m + 1, 0).getDate();
+}
+
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+async function fetchElevations(lats, lngs) {
+  const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats.join(',')}&longitude=${lngs.join(',')}`;
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error('Elevation API failed');
+  const data = await resp.json();
+  return data.elevation;
+}
+
+function destinationPoint(lat, lng, bearing, distMeters) {
+  const R = 6371000;
+  const d = distMeters / R;
+  const lat2 = lat + d * RAD * Math.cos(bearing * DEG);
+  const lng2 = lng + (d * RAD / Math.cos(lat * DEG)) * Math.sin(bearing * DEG);
+  return [lat2, lng2];
+}
+
+async function getHorizonProfile(lat, lng) {
+  const bearings = [];
+  const lats = [lat];
+  const lngs = [lng];
+  for (let b = 0; b < 360; b += 10) {
+    bearings.push(b);
+    const [lt, ln] = destinationPoint(lat, lng, b, 5000);
+    lats.push(lt);
+    lngs.push(ln);
+  }
+  const elevations = await fetchElevations(lats, lngs);
+  const observerElev = elevations[0];
+  const profile = [];
+  for (let i = 0; i < bearings.length; i++) {
+    const remoteElev = elevations[i + 1];
+    const angle = Math.atan2(remoteElev - observerElev, 5000) * RAD;
+    profile.push({ bearing: bearings[i], angle: Math.max(0, angle), remoteElev, observerElev });
+  }
+  return { profile, observerElev };
+}
+
+function getHorizonAngleAtAzimuth(profile, azimuth) {
+  const step = 10;
+  const idx = azimuth / step;
+  const lo = Math.floor(idx) % 36;
+  const hi = (lo + 1) % 36;
+  const frac = idx - Math.floor(idx);
+  return profile[lo].angle * (1 - frac) + profile[hi].angle * frac;
+}
+
+let azimuthChart = null;
+let horizonChart = null;
+
+function renderAzimuthChart(lat) {
+  document.getElementById('azimuth-placeholder').style.display = 'none';
+  document.getElementById('azimuth-chart-wrap').style.display = 'block';
+
+  const labels = [];
+  const data = [];
+  for (let d = 1; d <= 365; d++) {
+    const az = sunriseAzimuth(d, lat);
+    labels.push(d);
+    data.push(az);
+  }
+
+  const ctx = document.getElementById('azimuth-chart').getContext('2d');
+  if (azimuthChart) azimuthChart.destroy();
+
+  const markers = [
+    { day: 80, label: 'Equinox' },
+    { day: 172, label: 'Solstice' },
+    { day: 266, label: 'Equinox' },
+    { day: 355, label: 'Solstice' }
+  ];
+
+  azimuthChart = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Sunrise Azimuth',
+        data,
+        borderColor: '#e8a838',
+        backgroundColor: 'rgba(232,168,56,0.1)',
+        fill: true,
+        tension: 0.4,
+        pointRadius: 0,
+        borderWidth: 2
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          title: { display: true, text: 'Day of Year', color: '#8896a8' },
+          ticks: {
+            color: '#8896a8',
+            callback: (v) => {
+              const months = [0,31,59,90,120,151,181,212,243,273,304,334];
+              const i = months.findIndex((s,idx) => v >= s && (idx===11 || v < months[idx+1]));
+              if (months[i] === v) return MONTH_NAMES[i];
+              return '';
+            },
+            maxRotation: 0
+          },
+          grid: { color: 'rgba(45,58,77,0.5)' }
+        },
+        y: {
+          title: { display: true, text: 'Azimuth (degrees)', color: '#8896a8' },
+          ticks: { color: '#8896a8' },
+          grid: { color: 'rgba(45,58,77,0.5)' }
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            title: (items) => 'Day ' + items[0].label,
+            label: (item) => item.raw !== null ? 'Azimuth: ' + item.raw.toFixed(1) + '\u00B0' : 'No sunrise'
+          }
+        }
+      }
+    },
+    plugins: [{
+      id: 'eastLine',
+      afterDraw(chart) {
+        const yScale = chart.scales.y;
+        const xScale = chart.scales.x;
+        const c = chart.ctx;
+        if (90 >= yScale.min && 90 <= yScale.max) {
+          const y = yScale.getPixelForValue(90);
+          c.save();
+          c.strokeStyle = 'rgba(255,255,255,0.3)';
+          c.setLineDash([6, 4]);
+          c.lineWidth = 1;
+          c.beginPath();
+          c.moveTo(xScale.left, y);
+          c.lineTo(xScale.right, y);
+          c.stroke();
+          c.fillStyle = 'rgba(255,255,255,0.4)';
+          c.font = '11px DM Sans';
+          c.fillText('Due East (90\u00B0)', xScale.left + 5, y - 5);
+          c.restore();
+        }
+        markers.forEach(m => {
+          const x = xScale.getPixelForValue(m.day);
+          c.save();
+          c.strokeStyle = 'rgba(232,168,56,0.3)';
+          c.setLineDash([3, 3]);
+          c.lineWidth = 1;
+          c.beginPath();
+          c.moveTo(x, yScale.top);
+          c.lineTo(x, yScale.bottom);
+          c.stroke();
+          c.fillStyle = 'rgba(232,168,56,0.5)';
+          c.font = '10px DM Sans';
+          c.fillText(m.label, x + 3, yScale.top + 12);
+          c.restore();
+        });
+      }
+    }]
+  });
+}
+
+function renderHorizonChart(profile, minAz, maxAz) {
+  document.getElementById('horizon-placeholder').style.display = 'none';
+  document.getElementById('horizon-chart-wrap').style.display = 'block';
+
+  const labels = profile.map(p => p.bearing + '\u00B0');
+  const angles = profile.map(p => p.angle);
+
+  const colors = profile.map(p => {
+    const b = p.bearing;
+    if (minAz !== null && maxAz !== null && b >= minAz - 5 && b <= maxAz + 5) {
+      return p.angle > 0.5 ? 'rgba(232, 72, 72, 0.8)' : 'rgba(232, 168, 56, 0.8)';
+    }
+    return 'rgba(74, 85, 104, 0.5)';
+  });
+
+  const ctx = document.getElementById('horizon-chart').getContext('2d');
+  if (horizonChart) horizonChart.destroy();
+
+  horizonChart = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets: [{
+        label: 'Horizon Angle',
+        data: angles,
+        backgroundColor: colors,
+        borderColor: colors.map(c => c.replace('0.8', '1').replace('0.5', '0.7')),
+        borderWidth: 1
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        x: {
+          title: { display: true, text: 'Bearing (degrees)', color: '#8896a8' },
+          ticks: { color: '#8896a8', maxRotation: 45 },
+          grid: { color: 'rgba(45,58,77,0.3)' }
+        },
+        y: {
+          title: { display: true, text: 'Elevation Angle (degrees)', color: '#8896a8' },
+          ticks: { color: '#8896a8' },
+          grid: { color: 'rgba(45,58,77,0.3)' },
+          beginAtZero: true
+        }
+      },
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: (item) => 'Horizon angle: ' + item.raw.toFixed(2) + '\u00B0'
+          }
+        }
+      }
+    },
+    plugins: [{
+      id: 'azRange',
+      afterDraw(chart) {
+        if (minAz === null || maxAz === null) return;
+        const xScale = chart.scales.x;
+        const yScale = chart.scales.y;
+        const c = chart.ctx;
+        const minIdx = Math.floor(minAz / 10);
+        const maxIdx = Math.ceil(maxAz / 10);
+        const x1 = xScale.getPixelForValue(Math.max(0, minIdx - 0.5));
+        const x2 = xScale.getPixelForValue(Math.min(35, maxIdx + 0.5));
+        c.save();
+        c.fillStyle = 'rgba(232, 168, 56, 0.08)';
+        c.fillRect(x1, yScale.top, x2 - x1, yScale.bottom - yScale.top);
+        c.strokeStyle = 'rgba(232, 168, 56, 0.4)';
+        c.setLineDash([4, 3]);
+        c.lineWidth = 1;
+        [x1, x2].forEach(x => {
+          c.beginPath();
+          c.moveTo(x, yScale.top);
+          c.lineTo(x, yScale.bottom);
+          c.stroke();
+        });
+        c.fillStyle = 'rgba(232,168,56,0.6)';
+        c.font = '10px DM Sans';
+        c.fillText('Sunrise range', x1 + 3, yScale.top + 12);
+        c.restore();
+      }
+    }]
+  });
+}
+
+function renderCalendar(lat, profile) {
+  document.getElementById('calendar-placeholder').style.display = 'none';
+  document.getElementById('calendar-content').style.display = 'block';
+  const grid = document.getElementById('calendar-grid');
+  grid.innerHTML = '';
+
+  for (let m = 0; m < 12; m++) {
+    const block = document.createElement('div');
+    block.className = 'month-block';
+    const title = document.createElement('h3');
+    title.textContent = MONTH_NAMES[m];
+    block.appendChild(title);
+
+    const daysWrap = document.createElement('div');
+    daysWrap.className = 'month-days';
+
+    const firstDow = new Date(2025, m, 1).getDay();
+    for (let p = 0; p < firstDow; p++) {
+      const empty = document.createElement('div');
+      empty.className = 'day-cell empty';
+      daysWrap.appendChild(empty);
+    }
+
+    const days = daysInMonth(m);
+    for (let d = 1; d <= days; d++) {
+      const doy = dayOfYear(m, d);
+      const az = sunriseAzimuth(doy, lat);
+      const cell = document.createElement('div');
+      cell.className = 'day-cell';
+
+      let status, horizAngle = null;
+      if (az === null) {
+        status = 'no-sunrise';
+        cell.classList.add('no-sunrise');
+      } else {
+        horizAngle = getHorizonAngleAtAzimuth(profile, az);
+        if (horizAngle > 0.5) {
+          status = 'blocked';
+          cell.classList.add('blocked');
+        } else {
+          status = 'visible';
+          cell.classList.add('visible');
+        }
+      }
+
+      cell.addEventListener('mouseenter', (e) => {
+        const tip = document.getElementById('tooltip');
+        let html = '<strong>' + MONTH_NAMES[m] + ' ' + d + '</strong><br>';
+        if (az === null) {
+          html += 'No sunrise (polar night)';
+        } else {
+          html += 'Azimuth: ' + az.toFixed(1) + '\u00B0<br>';
+          html += 'Terrain angle: ' + horizAngle.toFixed(2) + '\u00B0<br>';
+          html += status === 'visible'
+            ? '<span style="color:var(--gold)">Sunrise visible</span>'
+            : '<span style="color:var(--red)">Blocked by terrain</span>';
+        }
+        tip.innerHTML = html;
+        tip.style.display = 'block';
+        tip.style.left = (e.clientX + 12) + 'px';
+        tip.style.top = (e.clientY - 10) + 'px';
+      });
+
+      cell.addEventListener('mousemove', (e) => {
+        const tip = document.getElementById('tooltip');
+        tip.style.left = (e.clientX + 12) + 'px';
+        tip.style.top = (e.clientY - 10) + 'px';
+      });
+
+      cell.addEventListener('mouseleave', () => {
+        document.getElementById('tooltip').style.display = 'none';
+      });
+
+      daysWrap.appendChild(cell);
+    }
+    block.appendChild(daysWrap);
+    grid.appendChild(block);
+  }
+}
+
+function renderSummary(lat, profile) {
+  const card = document.getElementById('summary-card');
+  card.style.display = 'block';
+
+  let visibleDays = 0, blockedDays = 0, noSunrise = 0;
+  for (let d = 1; d <= 365; d++) {
+    const az = sunriseAzimuth(d, lat);
+    if (az === null) { noSunrise++; continue; }
+    const ha = getHorizonAngleAtAzimuth(profile, az);
+    if (ha > 0.5) blockedDays++;
+    else visibleDays++;
+  }
+
+  const pct = ((visibleDays / 365) * 100).toFixed(0);
+  document.getElementById('summary-content').innerHTML =
+    '<div style="display:flex;gap:2rem;flex-wrap:wrap;font-size:0.95rem;">' +
+      '<div><span style="color:var(--gold);font-size:1.8rem;font-family:Playfair Display,serif;font-weight:700;">' + pct + '%</span><br><span style="color:var(--text-dim)">of days visible</span></div>' +
+      '<div><span style="color:var(--gold);font-size:1.4rem;font-weight:700;">' + visibleDays + '</span><br><span style="color:var(--text-dim)">visible days</span></div>' +
+      '<div><span style="color:var(--red);font-size:1.4rem;font-weight:700;">' + blockedDays + '</span><br><span style="color:var(--text-dim)">blocked days</span></div>' +
+      (noSunrise > 0 ? '<div><span style="color:var(--gray);font-size:1.4rem;font-weight:700;">' + noSunrise + '</span><br><span style="color:var(--text-dim)">no sunrise</span></div>' : '') +
+      '<div><span style="font-size:1.1rem;">' + lat.toFixed(4) + '\u00B0</span><br><span style="color:var(--text-dim)">latitude</span></div>' +
+    '</div>';
+}
+
+async function runAnalysis(lat, lng) {
+  ['azimuth-loading', 'horizon-loading', 'calendar-loading'].forEach(id => {
+    document.getElementById(id).classList.add('active');
+  });
+
+  renderAzimuthChart(lat);
+  document.getElementById('azimuth-loading').classList.remove('active');
+
+  let minAz = 360, maxAz = 0;
+  for (let d = 1; d <= 365; d++) {
+    const az = sunriseAzimuth(d, lat);
+    if (az !== null) {
+      minAz = Math.min(minAz, az);
+      maxAz = Math.max(maxAz, az);
+    }
+  }
+  if (minAz > maxAz) { minAz = null; maxAz = null; }
+
+  try {
+    const { profile } = await getHorizonProfile(lat, lng);
+
+    document.getElementById('horizon-loading').classList.remove('active');
+    renderHorizonChart(profile, minAz, maxAz);
+
+    document.getElementById('calendar-loading').classList.remove('active');
+    renderCalendar(lat, profile);
+    renderSummary(lat, profile);
+  } catch (err) {
+    console.error('Analysis error:', err);
+    ['horizon-loading', 'calendar-loading'].forEach(id => {
+      document.getElementById(id).classList.remove('active');
+    });
+    document.getElementById('horizon-placeholder').style.display = 'flex';
+    document.getElementById('horizon-placeholder').textContent = 'Error fetching elevation data. Try again.';
+  }
+}
+</script>
+</body>
+</html>
