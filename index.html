@@ -2,8 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sunrise Tool — Can You See the Sunrise?</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Sunrise Tool — Sun Position & Analysis</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#0f1729">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -32,31 +36,224 @@ body {
   background: var(--bg-primary);
   color: var(--text);
   min-height: 100vh;
+  overflow: hidden;
 }
 
 h1, h2, h3 { font-family: 'Playfair Display', serif; }
 
+/* === HEADER & NAV === */
 header {
   text-align: center;
-  padding: 2rem 1rem 1rem;
+  padding: 0.5rem 1rem;
   border-bottom: 1px solid var(--border);
+  background: var(--bg-primary);
+  z-index: 10;
+  position: relative;
 }
 
 header h1 {
-  font-size: 2.2rem;
+  font-size: 1.3rem;
   background: linear-gradient(135deg, var(--gold-light), var(--gold), #d4892a);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+  display: inline;
 }
 
-header p {
+#mode-nav {
+  display: flex;
+  justify-content: center;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+#mode-nav button {
+  background: var(--bg-secondary);
   color: var(--text-dim);
-  margin-top: 0.4rem;
-  font-size: 0.95rem;
+  border: 1px solid var(--border);
+  padding: 0.3rem 0.9rem;
+  border-radius: 20px;
+  cursor: pointer;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 500;
+  transition: all 0.2s;
 }
 
-.container {
+#mode-nav button.active {
+  background: var(--gold);
+  color: var(--bg-primary);
+  border-color: var(--gold);
+  font-weight: 700;
+}
+
+#mode-nav button:hover:not(.active) {
+  border-color: var(--gold);
+  color: var(--text);
+}
+
+/* === SUN POSITION VIEW === */
+#sun-view {
+  position: relative;
+  width: 100%;
+  height: calc(100vh - 58px);
+  overflow: hidden;
+}
+
+#camera-feed {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: none;
+  z-index: 1;
+}
+
+#panorama-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  z-index: 2;
+  cursor: grab;
+}
+
+#panorama-canvas.grabbing { cursor: grabbing; }
+
+/* === COMPASS STRIP === */
+#compass-canvas {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 28px;
+  z-index: 15;
+  pointer-events: none;
+}
+
+#heading-display {
+  position: absolute;
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(15, 23, 41, 0.6);
+  backdrop-filter: blur(4px);
+  padding: 0.1rem 0.5rem;
+  border-radius: 0 0 6px 6px;
+  z-index: 15;
+  font-size: 0.72rem;
+  color: var(--gold);
+  font-weight: 500;
+  pointer-events: none;
+}
+
+/* === SUN INFO PANEL === */
+#sun-info-panel {
+  position: absolute;
+  top: 48px;
+  left: 0.6rem;
+  background: rgba(15, 23, 41, 0.75);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(232, 168, 56, 0.25);
+  border-radius: 10px;
+  padding: 0.5rem 0.75rem;
+  z-index: 20;
+  font-size: 0.78rem;
+  min-width: 160px;
+}
+
+.info-label { color: var(--text-dim); font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.04em; }
+.info-value { color: var(--gold); font-weight: 700; font-size: 0.9rem; }
+.info-row { display: flex; gap: 0.8rem; margin-top: 0.2rem; }
+
+#sun-below-note {
+  margin-top: 0.2rem;
+  color: var(--red);
+  font-size: 0.7rem;
+  display: none;
+}
+
+/* === CONTROLS PANEL === */
+#controls-panel {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  background: rgba(15, 23, 41, 0.88);
+  backdrop-filter: blur(10px);
+  border-top: 1px solid rgba(232, 168, 56, 0.25);
+  padding: 0.5rem 0.75rem 0.6rem;
+  z-index: 20;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-wrap: wrap;
+}
+
+.control-row + .control-row { margin-top: 0.4rem; }
+.control-row label { color: var(--text-dim); font-size: 0.72rem; }
+
+.control-row input[type="number"],
+.control-row input[type="date"] {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 0.25rem 0.4rem;
+  border-radius: 5px;
+  font-size: 0.78rem;
+  font-family: 'DM Sans', sans-serif;
+}
+
+.control-row input[type="number"] { width: 85px; }
+.control-row input[type="date"] { width: 125px; }
+.control-row input[type="range"] { flex: 1; min-width: 80px; accent-color: var(--gold); }
+.control-row input[type="checkbox"] { accent-color: var(--gold); }
+
+.ctrl-btn {
+  background: var(--gold);
+  color: var(--bg-primary);
+  border: none;
+  padding: 0.25rem 0.6rem;
+  border-radius: 5px;
+  cursor: pointer;
+  font-weight: 700;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 0.72rem;
+  transition: background 0.2s;
+  white-space: nowrap;
+}
+
+.ctrl-btn:hover { background: var(--gold-light); }
+
+.ctrl-btn.secondary {
+  background: var(--bg-secondary);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.ctrl-btn.secondary:hover { border-color: var(--gold); }
+
+#time-display {
+  color: var(--gold);
+  font-weight: 700;
+  font-size: 1.05rem;
+  min-width: 42px;
+  text-align: center;
+}
+
+#sun-times-row {
+  font-size: 0.72rem;
+  color: var(--text-dim);
+}
+
+#sun-times-row span.t { color: var(--gold); font-weight: 500; }
+
+/* === ANALYSIS VIEW === */
+#analysis-view {
+  display: none;
+  overflow-y: auto;
+  height: calc(100vh - 58px);
+}
+
+.a-container {
   max-width: 1400px;
   margin: 0 auto;
   padding: 1.5rem;
@@ -73,21 +270,10 @@ header p {
   position: relative;
 }
 
-.card h2 {
-  font-size: 1.15rem;
-  color: var(--gold);
-  margin-bottom: 1rem;
-}
+.card h2 { font-size: 1.15rem; color: var(--gold); margin-bottom: 1rem; }
+.card.full-width { grid-column: 1 / -1; }
 
-.card.full-width {
-  grid-column: 1 / -1;
-}
-
-#map {
-  height: 350px;
-  border-radius: 8px;
-  z-index: 1;
-}
+#analysis-map { height: 350px; border-radius: 8px; z-index: 1; }
 
 .coords-bar {
   display: flex;
@@ -97,10 +283,7 @@ header p {
   flex-wrap: wrap;
 }
 
-.coords-bar label {
-  color: var(--text-dim);
-  font-size: 0.85rem;
-}
+.coords-bar label { color: var(--text-dim); font-size: 0.85rem; }
 
 .coords-bar input {
   background: var(--bg-secondary);
@@ -142,14 +325,10 @@ header p {
   transition: opacity 0.3s;
 }
 
-.loading-overlay.active {
-  opacity: 1;
-  pointer-events: auto;
-}
+.loading-overlay.active { opacity: 1; pointer-events: auto; }
 
 .spinner {
-  width: 36px;
-  height: 36px;
+  width: 36px; height: 36px;
   border: 3px solid var(--border);
   border-top-color: var(--gold);
   border-radius: 50%;
@@ -160,49 +339,18 @@ header p {
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .loading-text { color: var(--gold); font-weight: 500; }
+.chart-container { position: relative; width: 100%; height: 300px; }
 
-.chart-container {
-  position: relative;
-  width: 100%;
-  height: 300px;
-}
-
-.calendar-grid {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 1rem;
-}
-
-.month-block h3 {
-  font-size: 0.85rem;
-  color: var(--text-dim);
-  margin-bottom: 0.35rem;
-  font-family: 'DM Sans', sans-serif;
-  font-weight: 500;
-}
-
-.month-days {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
-}
+.calendar-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; }
+.month-block h3 { font-size: 0.85rem; color: var(--text-dim); margin-bottom: 0.35rem; font-family: 'DM Sans', sans-serif; font-weight: 500; }
+.month-days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px; }
 
 .day-cell {
-  width: 100%;
-  aspect-ratio: 1;
-  border-radius: 3px;
-  cursor: pointer;
-  position: relative;
-  transition: transform 0.15s;
-  border: 1px solid transparent;
+  width: 100%; aspect-ratio: 1; border-radius: 3px; cursor: pointer;
+  position: relative; transition: transform 0.15s; border: 1px solid transparent;
 }
 
-.day-cell:hover {
-  transform: scale(1.5);
-  z-index: 2;
-  border-color: var(--text);
-}
-
+.day-cell:hover { transform: scale(1.5); z-index: 2; border-color: var(--text); }
 .day-cell.clear { background: var(--gold); }
 .day-cell.short-delay { background: #c87a20; }
 .day-cell.medium-delay { background: #b85c1a; }
@@ -226,44 +374,20 @@ header p {
   line-height: 1.5;
 }
 
-.legend {
-  display: flex;
-  gap: 1.25rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-}
-
-.legend-item {
-  display: flex;
-  align-items: center;
-  gap: 0.35rem;
-  font-size: 0.8rem;
-  color: var(--text-dim);
-}
-
-.legend-swatch {
-  width: 14px;
-  height: 14px;
-  border-radius: 3px;
-}
-
-.placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: 200px;
-  color: var(--text-dim);
-  font-style: italic;
-}
+.legend { display: flex; gap: 1.25rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.legend-item { display: flex; align-items: center; gap: 0.35rem; font-size: 0.8rem; color: var(--text-dim); }
+.legend-swatch { width: 14px; height: 14px; border-radius: 3px; }
+.placeholder { display: flex; align-items: center; justify-content: center; height: 200px; color: var(--text-dim); font-style: italic; }
 
 @media (max-width: 900px) {
-  .container { grid-template-columns: 1fr; }
+  .a-container { grid-template-columns: 1fr; }
   .calendar-grid { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (max-width: 500px) {
   .calendar-grid { grid-template-columns: repeat(2, 1fr); }
-  header h1 { font-size: 1.6rem; }
+  header h1 { font-size: 1.1rem; }
+  #sun-info-panel { font-size: 0.7rem; min-width: 140px; padding: 0.4rem 0.6rem; }
 }
 </style>
 </head>
@@ -271,65 +395,113 @@ header p {
 
 <header>
   <h1>Sunrise Tool</h1>
-  <p>Click the map to see if you can watch the sunrise from any location</p>
-  <p style="font-size:0.75rem;color:#4a5568;margin-top:0.3rem;">Build: 2026-02-28 v3</p>
+  <nav id="mode-nav">
+    <button class="active" data-mode="sun">Sun Position</button>
+    <button data-mode="analysis">Yearly Analysis</button>
+  </nav>
 </header>
 
-<div class="container">
-  <div class="card">
-    <h2>Location</h2>
-    <div id="map"></div>
-    <div class="coords-bar">
+<!-- ==================== SUN POSITION VIEW ==================== -->
+<div id="sun-view">
+  <video id="camera-feed" autoplay playsinline></video>
+  <canvas id="panorama-canvas"></canvas>
+  <canvas id="compass-canvas"></canvas>
+  <div id="heading-display">--</div>
+
+  <div id="sun-info-panel">
+    <div class="info-label">Sun Position</div>
+    <div class="info-row">
+      <div><span class="info-label">Alt </span><span class="info-value" id="info-alt">--</span></div>
+      <div><span class="info-label">Az </span><span class="info-value" id="info-az">--</span></div>
+    </div>
+    <div class="info-row">
+      <div><span class="info-label">Dir </span><span class="info-value" id="info-dir">--</span></div>
+    </div>
+    <div id="sun-below-note">Below horizon</div>
+  </div>
+
+  <div id="controls-panel">
+    <div class="control-row">
+      <button class="ctrl-btn" id="gps-btn" title="Get GPS location">GPS</button>
       <label>Lat</label>
-      <input type="number" id="lat-input" step="0.0001" placeholder="48.8566">
+      <input type="number" id="sun-lat" step="0.0001" placeholder="48.8566">
       <label>Lng</label>
-      <input type="number" id="lng-input" step="0.0001" placeholder="2.3522">
-      <button id="go-btn">Go</button>
+      <input type="number" id="sun-lng" step="0.0001" placeholder="2.3522">
+      <button class="ctrl-btn" id="sun-go-btn">Go</button>
+      <button class="ctrl-btn secondary" id="camera-btn" style="display:none">Camera</button>
+    </div>
+    <div class="control-row">
+      <input type="date" id="date-picker">
+      <span id="time-display">12:00</span>
+      <input type="range" id="time-slider" min="0" max="1439" step="1" value="720">
+      <label style="white-space:nowrap"><input type="checkbox" id="live-time" checked> Now</label>
+    </div>
+    <div class="control-row" id="sun-times-row">
+      Sunrise: <span class="t" id="sunrise-time">--:--</span>&nbsp;
+      Noon: <span class="t" id="noon-time">--:--</span>&nbsp;
+      Sunset: <span class="t" id="sunset-time">--:--</span>
     </div>
   </div>
+</div>
 
-  <div class="card">
-    <h2>Sunrise Azimuth — Full Year</h2>
-    <div class="loading-overlay" id="azimuth-loading">
-      <div class="spinner"></div><span class="loading-text">Calculating...</span>
-    </div>
-    <div id="azimuth-placeholder" class="placeholder">Click the map to begin</div>
-    <div class="chart-container" id="azimuth-chart-wrap" style="display:none;">
-      <canvas id="azimuth-chart"></canvas>
-    </div>
-  </div>
-
-  <div class="card">
-    <h2>Horizon Obstruction Profile</h2>
-    <div class="loading-overlay" id="horizon-loading">
-      <div class="spinner"></div><span class="loading-text">Fetching elevation data...</span>
-    </div>
-    <div id="horizon-placeholder" class="placeholder">Click the map to begin</div>
-    <div class="chart-container" id="horizon-chart-wrap" style="display:none;">
-      <canvas id="horizon-chart"></canvas>
-    </div>
-  </div>
-
-  <div class="card" id="summary-card" style="display:none;">
-    <h2>Summary</h2>
-    <div id="summary-content"></div>
-  </div>
-
-  <div class="card full-width">
-    <h2>Sunrise Visibility Calendar</h2>
-    <div class="loading-overlay" id="calendar-loading">
-      <div class="spinner"></div><span class="loading-text">Building calendar...</span>
-    </div>
-    <div id="calendar-placeholder" class="placeholder">Click the map to begin</div>
-    <div id="calendar-content" style="display:none;">
-      <div class="legend">
-        <div class="legend-item"><div class="legend-swatch" style="background:var(--gold)"></div> Clear horizon (&lt;5 min)</div>
-        <div class="legend-item"><div class="legend-swatch" style="background:#c87a20"></div> Short delay (5–15 min)</div>
-        <div class="legend-item"><div class="legend-swatch" style="background:#b85c1a"></div> Medium delay (15–30 min)</div>
-        <div class="legend-item"><div class="legend-swatch" style="background:var(--red)"></div> Long delay (&gt;30 min)</div>
-        <div class="legend-item"><div class="legend-swatch" style="background:var(--gray)"></div> No sunrise</div>
+<!-- ==================== ANALYSIS VIEW ==================== -->
+<div id="analysis-view">
+  <div class="a-container">
+    <div class="card">
+      <h2>Location</h2>
+      <div id="analysis-map"></div>
+      <div class="coords-bar">
+        <label>Lat</label>
+        <input type="number" id="lat-input" step="0.0001" placeholder="48.8566">
+        <label>Lng</label>
+        <input type="number" id="lng-input" step="0.0001" placeholder="2.3522">
+        <button id="analysis-go-btn">Go</button>
       </div>
-      <div class="calendar-grid" id="calendar-grid"></div>
+    </div>
+
+    <div class="card">
+      <h2>Sunrise Azimuth — Full Year</h2>
+      <div class="loading-overlay" id="azimuth-loading">
+        <div class="spinner"></div><span class="loading-text">Calculating...</span>
+      </div>
+      <div id="azimuth-placeholder" class="placeholder">Click the map to begin</div>
+      <div class="chart-container" id="azimuth-chart-wrap" style="display:none">
+        <canvas id="azimuth-chart"></canvas>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Horizon Obstruction Profile</h2>
+      <div class="loading-overlay" id="horizon-loading">
+        <div class="spinner"></div><span class="loading-text">Fetching elevation data...</span>
+      </div>
+      <div id="horizon-placeholder" class="placeholder">Click the map to begin</div>
+      <div class="chart-container" id="horizon-chart-wrap" style="display:none">
+        <canvas id="horizon-chart"></canvas>
+      </div>
+    </div>
+
+    <div class="card" id="summary-card" style="display:none">
+      <h2>Summary</h2>
+      <div id="summary-content"></div>
+    </div>
+
+    <div class="card full-width">
+      <h2>Sunrise Visibility Calendar</h2>
+      <div class="loading-overlay" id="calendar-loading">
+        <div class="spinner"></div><span class="loading-text">Building calendar...</span>
+      </div>
+      <div id="calendar-placeholder" class="placeholder">Click the map to begin</div>
+      <div id="calendar-content" style="display:none">
+        <div class="legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:var(--gold)"></div> Clear (&lt;5 min)</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#c87a20"></div> Short (5–15 min)</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:#b85c1a"></div> Medium (15–30 min)</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:var(--red)"></div> Long (&gt;30 min)</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:var(--gray)"></div> No sunrise</div>
+        </div>
+        <div class="calendar-grid" id="calendar-grid"></div>
+      </div>
     </div>
   </div>
 </div>
@@ -337,62 +509,129 @@ header p {
 <div id="tooltip"></div>
 
 <script>
-const map = L.map('map').setView([48.85, 2.35], 4);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution: '&copy; OpenStreetMap contributors',
-  maxZoom: 18
-}).addTo(map);
-
-let marker = null;
-const latInput = document.getElementById('lat-input');
-const lngInput = document.getElementById('lng-input');
-
-function setLocation(lat, lng) {
-  lat = parseFloat(lat); lng = parseFloat(lng);
-  if (isNaN(lat) || isNaN(lng)) return;
-  latInput.value = lat.toFixed(4);
-  lngInput.value = lng.toFixed(4);
-  if (marker) marker.setLatLng([lat, lng]);
-  else marker = L.marker([lat, lng]).addTo(map);
-  map.setView([lat, lng], Math.max(map.getZoom(), 10));
-  runAnalysis(lat, lng);
-}
-
-map.on('click', e => setLocation(e.latlng.lat, e.latlng.lng));
-document.getElementById('go-btn').addEventListener('click', () => {
-  setLocation(latInput.value, lngInput.value);
-});
-
+// ===================================================================
+// CONSTANTS & STATE
+// ===================================================================
 const DEG = Math.PI / 180;
 const RAD = 180 / Math.PI;
-
-function solarDeclination(dayOfYear) {
-  return -23.45 * Math.cos((360 / 365) * (dayOfYear + 10) * DEG);
-}
-
-function sunriseAzimuth(dayOfYear, latDeg) {
-  const decl = solarDeclination(dayOfYear);
-  const latRad = latDeg * DEG;
-  const declRad = decl * DEG;
-  const cosA = Math.sin(declRad) / Math.cos(latRad);
-  if (cosA < -1 || cosA > 1) return null;
-  return Math.acos(cosA) * RAD;
-}
-
-function dayOfYear(month, day) {
-  const d = new Date(2025, month, day);
-  const start = new Date(2025, 0, 1);
-  return Math.floor((d - start) / 86400000) + 1;
-}
-
-function daysInMonth(m) {
-  return new Date(2025, m + 1, 0).getDate();
-}
-
 const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const H_FOV = 90;
+const V_FOV = 60;
+const HORIZON_FRAC = 0.55;
+
+const state = {
+  lat: null, lng: null,
+  selectedDate: new Date(),
+  selectedMinute: new Date().getHours() * 60 + new Date().getMinutes(),
+  useCurrentTime: true,
+  viewHeading: 180,
+  viewPitch: 10,
+  horizonProfile: null,
+  cameraActive: false,
+  cameraStream: null,
+  mode: 'sun',
+  sunPath: null,
+  sunTimes: null,
+  isDragging: false,
+  dragStartX: 0, dragStartY: 0,
+  dragStartHeading: 0, dragStartPitch: 0,
+  canvasW: 0, canvasH: 0, dpr: 1,
+  analysisInitialized: false
+};
+
+// ===================================================================
+// SUN POSITION ALGORITHM (Simplified Meeus)
+// ===================================================================
+
+function getSunPosition(date, lat, lng) {
+  const J2000 = Date.UTC(2000, 0, 1, 12, 0, 0);
+  const n = (date.getTime() - J2000) / 86400000;
+
+  let L = (280.460 + 0.9856474 * n) % 360;
+  if (L < 0) L += 360;
+
+  let g = (357.528 + 0.9856003 * n) % 360;
+  if (g < 0) g += 360;
+
+  const eclLong = L + 1.915 * Math.sin(g * DEG) + 0.020 * Math.sin(2 * g * DEG);
+  const obliquity = 23.439 - 0.0000004 * n;
+
+  const RA = Math.atan2(
+    Math.cos(obliquity * DEG) * Math.sin(eclLong * DEG),
+    Math.cos(eclLong * DEG)
+  );
+  const decl = Math.asin(Math.sin(obliquity * DEG) * Math.sin(eclLong * DEG));
+
+  let GMST = (280.46061837 + 360.98564736629 * n) % 360;
+  if (GMST < 0) GMST += 360;
+
+  const LST = ((GMST + lng) % 360) * DEG;
+  const HA = LST - RA;
+
+  const latRad = lat * DEG;
+  const sinAlt = Math.sin(latRad) * Math.sin(decl) + Math.cos(latRad) * Math.cos(decl) * Math.cos(HA);
+  const altitude = Math.asin(sinAlt);
+
+  const azimuth = Math.atan2(
+    -Math.cos(decl) * Math.sin(HA),
+    Math.sin(decl) * Math.cos(latRad) - Math.cos(decl) * Math.sin(latRad) * Math.cos(HA)
+  );
+
+  let azDeg = azimuth * RAD;
+  if (azDeg < 0) azDeg += 360;
+
+  return { altitude: altitude * RAD, azimuth: azDeg };
+}
+
+function getSunPath(date, lat, lng) {
+  const path = [];
+  const base = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  for (let m = 0; m < 1440; m += 5) {
+    const d = new Date(base.getTime() + m * 60000);
+    const pos = getSunPosition(d, lat, lng);
+    path.push({ minute: m, azimuth: pos.azimuth, altitude: pos.altitude });
+  }
+  return path;
+}
+
+function findSunTimes(path) {
+  let sunrise = null, sunset = null, maxAlt = -90, noonMin = 0;
+  for (let i = 1; i < path.length; i++) {
+    if (path[i - 1].altitude <= 0 && path[i].altitude > 0 && sunrise === null) {
+      const f = -path[i - 1].altitude / (path[i].altitude - path[i - 1].altitude);
+      sunrise = path[i - 1].minute + f * (path[i].minute - path[i - 1].minute);
+    }
+    if (path[i - 1].altitude > 0 && path[i].altitude <= 0 && sunset === null) {
+      const f = path[i - 1].altitude / (path[i - 1].altitude - path[i].altitude);
+      sunset = path[i - 1].minute + f * (path[i].minute - path[i - 1].minute);
+    }
+    if (path[i].altitude > maxAlt) { maxAlt = path[i].altitude; noonMin = path[i].minute; }
+  }
+  return { sunrise, sunset, solarNoon: noonMin, maxAltitude: maxAlt };
+}
+
+function minuteToTimeStr(m) {
+  if (m === null || m === undefined) return '--:--';
+  return String(Math.floor(m / 60)).padStart(2, '0') + ':' + String(Math.round(m % 60)).padStart(2, '0');
+}
+
+function azimuthToCompass(az) {
+  const d = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+  return d[Math.round(az / 22.5) % 16];
+}
+
+function getSelectedDate() {
+  const d = state.selectedDate;
+  const m = state.selectedMinute;
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), Math.floor(m / 60), m % 60, (m % 1) * 60);
+}
+
+// ===================================================================
+// ELEVATION API & HORIZON PROFILE (shared between views)
+// ===================================================================
 
 async function fetchElevations(lats, lngs) {
-  const url = `https://api.open-meteo.com/v1/elevation?latitude=${lats.join(',')}&longitude=${lngs.join(',')}`;
+  const url = 'https://api.open-meteo.com/v1/elevation?latitude=' + lats.join(',') + '&longitude=' + lngs.join(',');
   const resp = await fetch(url);
   if (!resp.ok) throw new Error('Elevation API failed');
   const data = await resp.json();
@@ -437,20 +676,559 @@ function getHorizonAngleAtAzimuth(profile, azimuth) {
   return profile[lo].angle * (1 - frac) + profile[hi].angle * frac;
 }
 
-// Sun's altitude rate at sunrise (degrees per minute)
-// At sunrise, dAlt/dt = (2*pi/1440) * cos(decl) * sin(hourAngleSunrise) in radians/min
-// converted to degrees/min
+// ===================================================================
+// PANORAMIC RENDERER
+// ===================================================================
+
+function renderPanorama() {
+  const canvas = document.getElementById('panorama-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = state.canvasW;
+  const H = state.canvasH;
+  if (!W || !H) return;
+
+  ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  if (state.lat === null) {
+    ctx.fillStyle = '#0f1729';
+    ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = '#8896a8';
+    ctx.font = '16px DM Sans';
+    ctx.textAlign = 'center';
+    ctx.fillText('Set your location to begin', W / 2, H / 2 - 10);
+    ctx.font = '13px DM Sans';
+    ctx.fillText('Use GPS or enter coordinates below', W / 2, H / 2 + 15);
+    return;
+  }
+
+  const heading = state.viewHeading;
+  const pitch = state.viewPitch;
+  const horizonY = H * HORIZON_FRAC + (pitch / V_FOV) * H;
+  const now = getSelectedDate();
+  const sunPos = getSunPosition(now, state.lat, state.lng);
+
+  function azX(az) {
+    let d = az - heading;
+    while (d > 180) d -= 360;
+    while (d < -180) d += 360;
+    return W / 2 + (d / H_FOV) * W;
+  }
+  function altY(alt) {
+    return horizonY - (alt / V_FOV) * H;
+  }
+
+  // --- Sky gradient ---
+  const skyTop = sunPos.altitude > 6 ? '#0a1628' : sunPos.altitude > 0 ? '#0f1a30' : sunPos.altitude > -6 ? '#0a0e1a' : '#050508';
+  const skyBot = sunPos.altitude > 10 ? '#3a6ea5' : sunPos.altitude > 2 ? '#c08040' : sunPos.altitude > -2 ? '#8a4020' : sunPos.altitude > -6 ? '#2a1520' : '#0a0a10';
+  const sg = ctx.createLinearGradient(0, 0, 0, Math.max(horizonY, 1));
+  sg.addColorStop(0, skyTop);
+  sg.addColorStop(1, skyBot);
+  ctx.fillStyle = sg;
+  ctx.fillRect(0, 0, W, Math.max(horizonY, 0));
+
+  // --- Ground gradient ---
+  const gg = ctx.createLinearGradient(0, Math.max(horizonY, 0), 0, H);
+  gg.addColorStop(0, sunPos.altitude > 0 ? '#2a4a2a' : '#1a2a1a');
+  gg.addColorStop(1, sunPos.altitude > 0 ? '#152015' : '#0a100a');
+  ctx.fillStyle = gg;
+  ctx.fillRect(0, Math.max(horizonY, 0), W, H);
+
+  // --- Terrain profile ---
+  if (state.horizonProfile) {
+    ctx.fillStyle = sunPos.altitude > 0 ? 'rgba(20,50,20,0.8)' : 'rgba(10,25,10,0.8)';
+    ctx.beginPath();
+    ctx.moveTo(0, Math.max(horizonY, H));
+    for (let px = 0; px <= W; px += 2) {
+      const az = ((heading - H_FOV / 2 + (px / W) * H_FOV) % 360 + 360) % 360;
+      const angle = getHorizonAngleAtAzimuth(state.horizonProfile, az);
+      ctx.lineTo(px, altY(angle));
+    }
+    ctx.lineTo(W, Math.max(horizonY, H));
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  // --- Horizon line ---
+  ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, horizonY);
+  ctx.lineTo(W, horizonY);
+  ctx.stroke();
+
+  // --- Cardinal directions ---
+  const cards = [
+    {az:0,l:'N',m:1},{az:45,l:'NE',m:0},{az:90,l:'E',m:1},{az:135,l:'SE',m:0},
+    {az:180,l:'S',m:1},{az:225,l:'SW',m:0},{az:270,l:'W',m:1},{az:315,l:'NW',m:0}
+  ];
+  cards.forEach(c => {
+    const x = azX(c.az);
+    if (x < -50 || x > W + 50) return;
+    ctx.strokeStyle = c.m ? 'rgba(255,255,255,0.3)' : 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = c.m ? 1.5 : 1;
+    ctx.beginPath();
+    ctx.moveTo(x, horizonY - 15);
+    ctx.lineTo(x, horizonY + 15);
+    ctx.stroke();
+    ctx.fillStyle = c.m ? 'rgba(255,255,255,0.6)' : 'rgba(255,255,255,0.3)';
+    ctx.font = c.m ? 'bold 14px DM Sans' : '11px DM Sans';
+    ctx.textAlign = 'center';
+    ctx.fillText(c.l, x, horizonY + 30);
+  });
+
+  // --- 10° ticks ---
+  for (let az = 0; az < 360; az += 10) {
+    if (az % 45 === 0) continue;
+    const x = azX(az);
+    if (x < -10 || x > W + 10) continue;
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(x, horizonY - 5);
+    ctx.lineTo(x, horizonY + 5);
+    ctx.stroke();
+  }
+
+  // --- Sun path arc ---
+  if (state.sunPath) {
+    ctx.strokeStyle = 'rgba(232,168,56,0.35)';
+    ctx.setLineDash([6, 4]);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    let started = false, prevX = null;
+    for (const p of state.sunPath) {
+      if (p.altitude < -8) { started = false; prevX = null; continue; }
+      const x = azX(p.azimuth);
+      const y = altY(p.altitude);
+      if (prevX !== null && Math.abs(x - prevX) > W * 0.5) {
+        ctx.stroke();
+        ctx.beginPath();
+        started = false;
+      }
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+      prevX = x;
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Hour markers
+    for (let h = 0; h < 24; h++) {
+      const idx = h * 12;
+      if (idx >= state.sunPath.length) continue;
+      const p = state.sunPath[idx];
+      if (p.altitude < -5) continue;
+      const x = azX(p.azimuth);
+      const y = altY(p.altitude);
+      if (x < -30 || x > W + 30) continue;
+      ctx.fillStyle = 'rgba(232,168,56,0.5)';
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(255,255,255,0.4)';
+      ctx.font = '10px DM Sans';
+      ctx.textAlign = 'center';
+      ctx.fillText(h + ':00', x, y - 8);
+    }
+  }
+
+  // --- Sun ---
+  drawSun(ctx, azX, altY, sunPos);
+
+  // Update info panel
+  updateInfoPanel(sunPos);
+}
+
+function drawSun(ctx, azX, altY, sunPos) {
+  const sx = azX(sunPos.azimuth);
+  const sy = altY(sunPos.altitude);
+  const W = state.canvasW;
+  const H = state.canvasH;
+  if (sx < -100 || sx > W + 100 || sy < -100 || sy > H + 100) return;
+
+  const below = sunPos.altitude < 0;
+  const glowR = below ? 25 : 40;
+  const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, glowR);
+  if (below) {
+    glow.addColorStop(0, 'rgba(232,168,56,0.4)');
+    glow.addColorStop(1, 'rgba(232,168,56,0)');
+  } else {
+    glow.addColorStop(0, 'rgba(255,230,80,0.9)');
+    glow.addColorStop(0.3, 'rgba(255,200,50,0.4)');
+    glow.addColorStop(1, 'rgba(255,160,30,0)');
+  }
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
+  ctx.fill();
+
+  const coreR = below ? 6 : 12;
+  ctx.fillStyle = below ? 'rgba(232,168,56,0.6)' : '#FFD700';
+  ctx.beginPath();
+  ctx.arc(sx, sy, coreR, 0, Math.PI * 2);
+  ctx.fill();
+
+  if (!below && sunPos.altitude > 1) {
+    ctx.strokeStyle = 'rgba(255,220,50,0.3)';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(sx + Math.cos(a) * (coreR + 4), sy + Math.sin(a) * (coreR + 4));
+      ctx.lineTo(sx + Math.cos(a) * (coreR + 14), sy + Math.sin(a) * (coreR + 14));
+      ctx.stroke();
+    }
+  }
+
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.font = '11px DM Sans';
+  ctx.textAlign = 'center';
+  ctx.fillText(sunPos.altitude.toFixed(1) + '\u00B0', sx, sy + (below ? 16 : coreR + 22));
+}
+
+function updateInfoPanel(sunPos) {
+  document.getElementById('info-alt').textContent = sunPos.altitude.toFixed(1) + '\u00B0';
+  document.getElementById('info-az').textContent = sunPos.azimuth.toFixed(1) + '\u00B0';
+  document.getElementById('info-dir').textContent = azimuthToCompass(sunPos.azimuth);
+  document.getElementById('sun-below-note').style.display = sunPos.altitude < 0 ? 'block' : 'none';
+}
+
+// ===================================================================
+// COMPASS STRIP RENDERER
+// ===================================================================
+
+function renderCompassStrip() {
+  const canvas = document.getElementById('compass-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = state.canvasW;
+  const H = 28;
+  if (!W) return;
+
+  ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = 'rgba(15,23,41,0.6)';
+  ctx.fillRect(0, 0, W, H);
+
+  const heading = state.viewHeading;
+  const cx = W / 2;
+
+  for (let az = 0; az < 360; az += 5) {
+    let d = az - heading;
+    while (d > 180) d -= 360;
+    while (d < -180) d += 360;
+    const x = cx + (d / H_FOV) * W;
+    if (x < -20 || x > W + 20) continue;
+
+    const isCard = az % 90 === 0;
+    const isInter = az % 45 === 0 && !isCard;
+    const tickH = isCard ? 10 : isInter ? 7 : az % 10 === 0 ? 5 : 3;
+
+    ctx.strokeStyle = isCard ? '#e8a838' : 'rgba(255,255,255,0.3)';
+    ctx.lineWidth = isCard ? 2 : 1;
+    ctx.beginPath();
+    ctx.moveTo(x, H);
+    ctx.lineTo(x, H - tickH);
+    ctx.stroke();
+
+    if (isCard || isInter) {
+      const labels = {0:'N',45:'NE',90:'E',135:'SE',180:'S',225:'SW',270:'W',315:'NW'};
+      ctx.fillStyle = isCard ? '#e8a838' : 'rgba(255,255,255,0.5)';
+      ctx.font = isCard ? 'bold 11px DM Sans' : '9px DM Sans';
+      ctx.textAlign = 'center';
+      ctx.fillText(labels[az], x, H - tickH - 3);
+    }
+  }
+
+  ctx.fillStyle = '#e8a838';
+  ctx.beginPath();
+  ctx.moveTo(cx, H);
+  ctx.lineTo(cx - 4, H - 4);
+  ctx.lineTo(cx + 4, H - 4);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// ===================================================================
+// CAMERA & DEVICE ORIENTATION
+// ===================================================================
+
+async function startCamera() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } }
+    });
+    document.getElementById('camera-feed').srcObject = stream;
+    document.getElementById('camera-feed').style.display = 'block';
+    state.cameraStream = stream;
+    state.cameraActive = true;
+    document.getElementById('camera-btn').textContent = 'Close Cam';
+    requestOrientationPermission();
+  } catch (err) {
+    alert('Camera not available: ' + err.message);
+  }
+}
+
+function stopCamera() {
+  if (state.cameraStream) {
+    state.cameraStream.getTracks().forEach(t => t.stop());
+    state.cameraStream = null;
+  }
+  document.getElementById('camera-feed').srcObject = null;
+  document.getElementById('camera-feed').style.display = 'none';
+  state.cameraActive = false;
+  document.getElementById('camera-btn').textContent = 'Camera';
+  window.removeEventListener('deviceorientation', onDeviceOrientation);
+  window.removeEventListener('deviceorientationabsolute', onDeviceOrientation);
+}
+
+function requestOrientationPermission() {
+  if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    DeviceOrientationEvent.requestPermission().then(r => {
+      if (r === 'granted') bindOrientation();
+    }).catch(() => {});
+  } else {
+    bindOrientation();
+  }
+}
+
+function bindOrientation() {
+  window.addEventListener('deviceorientationabsolute', onDeviceOrientation, true);
+  window.addEventListener('deviceorientation', onDeviceOrientation, true);
+}
+
+function onDeviceOrientation(event) {
+  let heading = event.alpha;
+  if (event.webkitCompassHeading !== undefined) heading = event.webkitCompassHeading;
+  else if (heading !== null) heading = (360 - heading) % 360;
+  if (heading !== null && !isNaN(heading)) state.viewHeading = heading;
+  if (event.beta !== null) state.viewPitch = Math.max(-10, Math.min(80, 90 - event.beta));
+}
+
+// ===================================================================
+// CAMERA AR OVERLAY RENDERER
+// ===================================================================
+
+function renderCameraOverlay() {
+  const canvas = document.getElementById('panorama-canvas');
+  const ctx = canvas.getContext('2d');
+  const W = state.canvasW;
+  const H = state.canvasH;
+  if (!W || !H || state.lat === null) return;
+
+  ctx.setTransform(state.dpr, 0, 0, state.dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+
+  const heading = state.viewHeading;
+  const pitch = state.viewPitch;
+  const horizonY = H * HORIZON_FRAC + (pitch / V_FOV) * H;
+  const now = getSelectedDate();
+  const sunPos = getSunPosition(now, state.lat, state.lng);
+
+  function azX(az) {
+    let d = az - heading;
+    while (d > 180) d -= 360;
+    while (d < -180) d += 360;
+    return W / 2 + (d / H_FOV) * W;
+  }
+  function altY(alt) { return horizonY - (alt / V_FOV) * H; }
+
+  // Sun path
+  if (state.sunPath) {
+    ctx.strokeStyle = 'rgba(232,168,56,0.5)';
+    ctx.setLineDash([6, 4]);
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    let started = false, prevX = null;
+    for (const p of state.sunPath) {
+      if (p.altitude < -8) { started = false; prevX = null; continue; }
+      const x = azX(p.azimuth);
+      const y = altY(p.altitude);
+      if (prevX !== null && Math.abs(x - prevX) > W * 0.5) {
+        ctx.stroke(); ctx.beginPath(); started = false;
+      }
+      if (!started) { ctx.moveTo(x, y); started = true; }
+      else ctx.lineTo(x, y);
+      prevX = x;
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  drawSun(ctx, azX, altY, sunPos);
+  updateInfoPanel(sunPos);
+}
+
+// ===================================================================
+// PANNING (mouse/touch)
+// ===================================================================
+
+function initPanning() {
+  const canvas = document.getElementById('panorama-canvas');
+
+  canvas.addEventListener('pointerdown', e => {
+    if (state.cameraActive) return;
+    state.isDragging = true;
+    state.dragStartX = e.clientX;
+    state.dragStartY = e.clientY;
+    state.dragStartHeading = state.viewHeading;
+    state.dragStartPitch = state.viewPitch;
+    canvas.setPointerCapture(e.pointerId);
+    canvas.classList.add('grabbing');
+  });
+
+  canvas.addEventListener('pointermove', e => {
+    if (!state.isDragging) return;
+    const dx = e.clientX - state.dragStartX;
+    const dy = e.clientY - state.dragStartY;
+    state.viewHeading = ((state.dragStartHeading - (dx / state.canvasW) * H_FOV) % 360 + 360) % 360;
+    state.viewPitch = Math.max(-10, Math.min(80, state.dragStartPitch + (dy / state.canvasH) * V_FOV));
+  });
+
+  canvas.addEventListener('pointerup', () => {
+    state.isDragging = false;
+    canvas.classList.remove('grabbing');
+  });
+
+  canvas.addEventListener('pointercancel', () => {
+    state.isDragging = false;
+    canvas.classList.remove('grabbing');
+  });
+}
+
+// ===================================================================
+// CONTROLS
+// ===================================================================
+
+function updateSunData() {
+  if (state.lat === null) return;
+  state.sunPath = getSunPath(getSelectedDate(), state.lat, state.lng);
+  state.sunTimes = findSunTimes(state.sunPath);
+  document.getElementById('sunrise-time').textContent = minuteToTimeStr(state.sunTimes.sunrise);
+  document.getElementById('sunset-time').textContent = minuteToTimeStr(state.sunTimes.sunset);
+  document.getElementById('noon-time').textContent = minuteToTimeStr(state.sunTimes.solarNoon);
+}
+
+async function setLocationSun(lat, lng) {
+  state.lat = lat;
+  state.lng = lng;
+  document.getElementById('sun-lat').value = lat.toFixed(4);
+  document.getElementById('sun-lng').value = lng.toFixed(4);
+  updateSunData();
+  try {
+    const { profile } = await getHorizonProfile(lat, lng);
+    state.horizonProfile = profile;
+  } catch (err) {
+    console.warn('Horizon profile fetch failed:', err);
+  }
+}
+
+function switchMode(mode) {
+  state.mode = mode;
+  document.querySelectorAll('#mode-nav button').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
+  document.getElementById('sun-view').style.display = mode === 'sun' ? 'block' : 'none';
+  document.getElementById('analysis-view').style.display = mode === 'analysis' ? 'block' : 'none';
+  document.body.style.overflow = mode === 'sun' ? 'hidden' : 'auto';
+
+  if (mode === 'analysis' && !state.analysisInitialized) {
+    initAnalysis();
+    state.analysisInitialized = true;
+  }
+  if (mode === 'sun') resizeCanvas();
+}
+
+function initControls() {
+  const datePicker = document.getElementById('date-picker');
+  const slider = document.getElementById('time-slider');
+  const timeDisp = document.getElementById('time-display');
+  const now = new Date();
+
+  datePicker.value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+  state.selectedMinute = now.getHours() * 60 + now.getMinutes();
+  slider.value = Math.round(state.selectedMinute);
+  timeDisp.textContent = minuteToTimeStr(state.selectedMinute);
+
+  datePicker.addEventListener('change', () => {
+    const p = datePicker.value.split('-');
+    state.selectedDate = new Date(+p[0], +p[1] - 1, +p[2]);
+    updateSunData();
+  });
+
+  slider.addEventListener('input', () => {
+    state.selectedMinute = +slider.value;
+    timeDisp.textContent = minuteToTimeStr(+slider.value);
+    document.getElementById('live-time').checked = false;
+    state.useCurrentTime = false;
+  });
+
+  document.getElementById('live-time').addEventListener('change', e => {
+    state.useCurrentTime = e.target.checked;
+  });
+
+  document.getElementById('gps-btn').addEventListener('click', () => {
+    if (!navigator.geolocation) { alert('Geolocation not available'); return; }
+    document.getElementById('gps-btn').textContent = '...';
+    navigator.geolocation.getCurrentPosition(
+      pos => { document.getElementById('gps-btn').textContent = 'GPS'; setLocationSun(pos.coords.latitude, pos.coords.longitude); },
+      err => { document.getElementById('gps-btn').textContent = 'GPS'; alert('Location error: ' + err.message); },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  });
+
+  document.getElementById('sun-go-btn').addEventListener('click', () => {
+    const lat = parseFloat(document.getElementById('sun-lat').value);
+    const lng = parseFloat(document.getElementById('sun-lng').value);
+    if (!isNaN(lat) && !isNaN(lng)) setLocationSun(lat, lng);
+  });
+
+  if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    document.getElementById('camera-btn').style.display = 'inline-block';
+    document.getElementById('camera-btn').addEventListener('click', () => {
+      if (state.cameraActive) stopCamera(); else startCamera();
+    });
+  }
+
+  document.querySelectorAll('#mode-nav button').forEach(btn => {
+    btn.addEventListener('click', () => switchMode(btn.dataset.mode));
+  });
+}
+
+// ===================================================================
+// ANALYSIS VIEW (existing functionality, lazily initialized)
+// ===================================================================
+
+let analysisMap = null, analysisMarker = null, azimuthChart = null, horizonChart = null;
+
+function solarDeclination(dayOfYear) {
+  return -23.45 * Math.cos((360 / 365) * (dayOfYear + 10) * DEG);
+}
+
+function sunriseAzimuth(dayOfYear, latDeg) {
+  const decl = solarDeclination(dayOfYear);
+  const latRad = latDeg * DEG;
+  const declRad = decl * DEG;
+  const cosA = Math.sin(declRad) / Math.cos(latRad);
+  if (cosA < -1 || cosA > 1) return null;
+  return Math.acos(cosA) * RAD;
+}
+
+function dayOfYear(month, day) {
+  const d = new Date(2025, month, day);
+  const start = new Date(2025, 0, 1);
+  return Math.floor((d - start) / 86400000) + 1;
+}
+
+function daysInMonth(m) { return new Date(2025, m + 1, 0).getDate(); }
+
 function sunElevationRateAtSunrise(dayOfYr, latDeg) {
   const decl = solarDeclination(dayOfYr) * DEG;
   const lat = latDeg * DEG;
   const cosHA = -Math.tan(lat) * Math.tan(decl);
   if (cosHA < -1 || cosHA > 1) return 0;
   const sinHA = Math.sqrt(1 - cosHA * cosHA);
-  // 2*pi/1440 = 0.004363 rad/min (Earth rotation rate)
   return (0.004363 * Math.cos(decl) * sinHA) * RAD;
 }
 
-// Minutes after astronomical sunrise until sun clears terrain
 function delayMinutes(terrainAngle, dayOfYr, latDeg) {
   if (terrainAngle <= 0) return 0;
   const rate = sunElevationRateAtSunrise(dayOfYr, latDeg);
@@ -458,207 +1236,70 @@ function delayMinutes(terrainAngle, dayOfYr, latDeg) {
   return terrainAngle / rate;
 }
 
-let azimuthChart = null;
-let horizonChart = null;
-
 function renderAzimuthChart(lat) {
   document.getElementById('azimuth-placeholder').style.display = 'none';
   document.getElementById('azimuth-chart-wrap').style.display = 'block';
-
-  const labels = [];
-  const data = [];
-  for (let d = 1; d <= 365; d++) {
-    const az = sunriseAzimuth(d, lat);
-    labels.push(d);
-    data.push(az);
-  }
-
+  const labels = [], data = [];
+  for (let d = 1; d <= 365; d++) { labels.push(d); data.push(sunriseAzimuth(d, lat)); }
   const ctx = document.getElementById('azimuth-chart').getContext('2d');
   if (azimuthChart) azimuthChart.destroy();
-
-  const markers = [
-    { day: 80, label: 'Equinox' },
-    { day: 172, label: 'Solstice' },
-    { day: 266, label: 'Equinox' },
-    { day: 355, label: 'Solstice' }
-  ];
-
+  const markers = [{day:80,label:'Equinox'},{day:172,label:'Solstice'},{day:266,label:'Equinox'},{day:355,label:'Solstice'}];
   azimuthChart = new Chart(ctx, {
     type: 'line',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Sunrise Azimuth',
-        data,
-        borderColor: '#e8a838',
-        backgroundColor: 'rgba(232,168,56,0.1)',
-        fill: true,
-        tension: 0.4,
-        pointRadius: 0,
-        borderWidth: 2
-      }]
-    },
+    data: { labels, datasets: [{ label: 'Sunrise Azimuth', data, borderColor: '#e8a838', backgroundColor: 'rgba(232,168,56,0.1)', fill: true, tension: 0.4, pointRadius: 0, borderWidth: 2 }] },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       scales: {
-        x: {
-          title: { display: true, text: 'Day of Year', color: '#8896a8' },
-          ticks: {
-            color: '#8896a8',
-            callback: (v) => {
-              const months = [0,31,59,90,120,151,181,212,243,273,304,334];
-              const i = months.findIndex((s,idx) => v >= s && (idx===11 || v < months[idx+1]));
-              if (months[i] === v) return MONTH_NAMES[i];
-              return '';
-            },
-            maxRotation: 0
-          },
-          grid: { color: 'rgba(45,58,77,0.5)' }
-        },
-        y: {
-          title: { display: true, text: 'Azimuth (degrees)', color: '#8896a8' },
-          ticks: { color: '#8896a8' },
-          grid: { color: 'rgba(45,58,77,0.5)' }
-        }
+        x: { title: { display: true, text: 'Day of Year', color: '#8896a8' }, ticks: { color: '#8896a8', callback: v => { const ms = [0,31,59,90,120,151,181,212,243,273,304,334]; const i = ms.findIndex((s,idx) => v >= s && (idx===11 || v < ms[idx+1])); if (ms[i] === v) return MONTH_NAMES[i]; return ''; }, maxRotation: 0 }, grid: { color: 'rgba(45,58,77,0.5)' } },
+        y: { title: { display: true, text: 'Azimuth (degrees)', color: '#8896a8' }, ticks: { color: '#8896a8' }, grid: { color: 'rgba(45,58,77,0.5)' } }
       },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            title: (items) => 'Day ' + items[0].label,
-            label: (item) => item.raw !== null ? 'Azimuth: ' + item.raw.toFixed(1) + '\u00B0' : 'No sunrise'
-          }
-        }
-      }
+      plugins: { legend: { display: false }, tooltip: { callbacks: { title: items => 'Day ' + items[0].label, label: item => item.raw !== null ? 'Azimuth: ' + item.raw.toFixed(1) + '\u00B0' : 'No sunrise' } } }
     },
-    plugins: [{
-      id: 'eastLine',
-      afterDraw(chart) {
-        const yScale = chart.scales.y;
-        const xScale = chart.scales.x;
-        const c = chart.ctx;
-        if (90 >= yScale.min && 90 <= yScale.max) {
-          const y = yScale.getPixelForValue(90);
-          c.save();
-          c.strokeStyle = 'rgba(255,255,255,0.3)';
-          c.setLineDash([6, 4]);
-          c.lineWidth = 1;
-          c.beginPath();
-          c.moveTo(xScale.left, y);
-          c.lineTo(xScale.right, y);
-          c.stroke();
-          c.fillStyle = 'rgba(255,255,255,0.4)';
-          c.font = '11px DM Sans';
-          c.fillText('Due East (90\u00B0)', xScale.left + 5, y - 5);
-          c.restore();
-        }
-        markers.forEach(m => {
-          const x = xScale.getPixelForValue(m.day);
-          c.save();
-          c.strokeStyle = 'rgba(232,168,56,0.3)';
-          c.setLineDash([3, 3]);
-          c.lineWidth = 1;
-          c.beginPath();
-          c.moveTo(x, yScale.top);
-          c.lineTo(x, yScale.bottom);
-          c.stroke();
-          c.fillStyle = 'rgba(232,168,56,0.5)';
-          c.font = '10px DM Sans';
-          c.fillText(m.label, x + 3, yScale.top + 12);
-          c.restore();
-        });
-      }
-    }]
+    plugins: [{ id: 'eastLine', afterDraw(chart) {
+      const yS = chart.scales.y, xS = chart.scales.x, c = chart.ctx;
+      if (90 >= yS.min && 90 <= yS.max) { const y = yS.getPixelForValue(90); c.save(); c.strokeStyle = 'rgba(255,255,255,0.3)'; c.setLineDash([6,4]); c.lineWidth = 1; c.beginPath(); c.moveTo(xS.left, y); c.lineTo(xS.right, y); c.stroke(); c.fillStyle = 'rgba(255,255,255,0.4)'; c.font = '11px DM Sans'; c.fillText('Due East (90\u00B0)', xS.left + 5, y - 5); c.restore(); }
+      markers.forEach(m => { const x = xS.getPixelForValue(m.day); c.save(); c.strokeStyle = 'rgba(232,168,56,0.3)'; c.setLineDash([3,3]); c.lineWidth = 1; c.beginPath(); c.moveTo(x, yS.top); c.lineTo(x, yS.bottom); c.stroke(); c.fillStyle = 'rgba(232,168,56,0.5)'; c.font = '10px DM Sans'; c.fillText(m.label, x + 3, yS.top + 12); c.restore(); });
+    }}]
   });
 }
 
 function renderHorizonChart(profile, minAz, maxAz) {
   document.getElementById('horizon-placeholder').style.display = 'none';
   document.getElementById('horizon-chart-wrap').style.display = 'block';
-
   const labels = profile.map(p => p.bearing + '\u00B0');
   const angles = profile.map(p => p.angle);
-
   const colors = profile.map(p => {
     const b = p.bearing;
     if (minAz !== null && maxAz !== null && b >= minAz - 5 && b <= maxAz + 5) {
-      if (p.angle > 3) return 'rgba(232, 72, 72, 0.8)';
-      if (p.angle > 1) return 'rgba(184, 92, 26, 0.8)';
-      return 'rgba(232, 168, 56, 0.8)';
+      if (p.angle > 3) return 'rgba(232,72,72,0.8)';
+      if (p.angle > 1) return 'rgba(184,92,26,0.8)';
+      return 'rgba(232,168,56,0.8)';
     }
-    return 'rgba(74, 85, 104, 0.5)';
+    return 'rgba(74,85,104,0.5)';
   });
-
   const ctx = document.getElementById('horizon-chart').getContext('2d');
   if (horizonChart) horizonChart.destroy();
-
   horizonChart = new Chart(ctx, {
     type: 'bar',
-    data: {
-      labels,
-      datasets: [{
-        label: 'Horizon Angle',
-        data: angles,
-        backgroundColor: colors,
-        borderColor: colors.map(c => c.replace('0.8', '1').replace('0.5', '0.7')),
-        borderWidth: 1
-      }]
-    },
+    data: { labels, datasets: [{ label: 'Horizon Angle', data: angles, backgroundColor: colors, borderColor: colors.map(c => c.replace('0.8','1').replace('0.5','0.7')), borderWidth: 1 }] },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       scales: {
-        x: {
-          title: { display: true, text: 'Bearing (degrees)', color: '#8896a8' },
-          ticks: { color: '#8896a8', maxRotation: 45 },
-          grid: { color: 'rgba(45,58,77,0.3)' }
-        },
-        y: {
-          title: { display: true, text: 'Elevation Angle (degrees)', color: '#8896a8' },
-          ticks: { color: '#8896a8' },
-          grid: { color: 'rgba(45,58,77,0.3)' },
-          beginAtZero: true
-        }
+        x: { title: { display: true, text: 'Bearing (degrees)', color: '#8896a8' }, ticks: { color: '#8896a8', maxRotation: 45 }, grid: { color: 'rgba(45,58,77,0.3)' } },
+        y: { title: { display: true, text: 'Elevation Angle (degrees)', color: '#8896a8' }, ticks: { color: '#8896a8' }, grid: { color: 'rgba(45,58,77,0.3)' }, beginAtZero: true }
       },
-      plugins: {
-        legend: { display: false },
-        tooltip: {
-          callbacks: {
-            label: (item) => 'Horizon angle: ' + item.raw.toFixed(2) + '\u00B0'
-          }
-        }
-      }
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: item => 'Horizon angle: ' + item.raw.toFixed(2) + '\u00B0' } } }
     },
-    plugins: [{
-      id: 'azRange',
-      afterDraw(chart) {
-        if (minAz === null || maxAz === null) return;
-        const xScale = chart.scales.x;
-        const yScale = chart.scales.y;
-        const c = chart.ctx;
-        const minIdx = Math.floor(minAz / 10);
-        const maxIdx = Math.ceil(maxAz / 10);
-        const x1 = xScale.getPixelForValue(Math.max(0, minIdx - 0.5));
-        const x2 = xScale.getPixelForValue(Math.min(35, maxIdx + 0.5));
-        c.save();
-        c.fillStyle = 'rgba(232, 168, 56, 0.08)';
-        c.fillRect(x1, yScale.top, x2 - x1, yScale.bottom - yScale.top);
-        c.strokeStyle = 'rgba(232, 168, 56, 0.4)';
-        c.setLineDash([4, 3]);
-        c.lineWidth = 1;
-        [x1, x2].forEach(x => {
-          c.beginPath();
-          c.moveTo(x, yScale.top);
-          c.lineTo(x, yScale.bottom);
-          c.stroke();
-        });
-        c.fillStyle = 'rgba(232,168,56,0.6)';
-        c.font = '10px DM Sans';
-        c.fillText('Sunrise range', x1 + 3, yScale.top + 12);
-        c.restore();
-      }
-    }]
+    plugins: [{ id: 'azRange', afterDraw(chart) {
+      if (minAz === null || maxAz === null) return;
+      const xS = chart.scales.x, yS = chart.scales.y, c = chart.ctx;
+      const x1 = xS.getPixelForValue(Math.max(0, Math.floor(minAz/10) - 0.5));
+      const x2 = xS.getPixelForValue(Math.min(35, Math.ceil(maxAz/10) + 0.5));
+      c.save(); c.fillStyle = 'rgba(232,168,56,0.08)'; c.fillRect(x1, yS.top, x2 - x1, yS.bottom - yS.top);
+      c.strokeStyle = 'rgba(232,168,56,0.4)'; c.setLineDash([4,3]); c.lineWidth = 1;
+      [x1,x2].forEach(x => { c.beginPath(); c.moveTo(x, yS.top); c.lineTo(x, yS.bottom); c.stroke(); });
+      c.fillStyle = 'rgba(232,168,56,0.6)'; c.font = '10px DM Sans'; c.fillText('Sunrise range', x1 + 3, yS.top + 12); c.restore();
+    }}]
   });
 }
 
@@ -667,76 +1308,34 @@ function renderCalendar(lat, profile) {
   document.getElementById('calendar-content').style.display = 'block';
   const grid = document.getElementById('calendar-grid');
   grid.innerHTML = '';
-
   for (let m = 0; m < 12; m++) {
     const block = document.createElement('div');
     block.className = 'month-block';
     const title = document.createElement('h3');
     title.textContent = MONTH_NAMES[m];
     block.appendChild(title);
-
     const daysWrap = document.createElement('div');
     daysWrap.className = 'month-days';
-
     const firstDow = new Date(2025, m, 1).getDay();
-    for (let p = 0; p < firstDow; p++) {
-      const empty = document.createElement('div');
-      empty.className = 'day-cell empty';
-      daysWrap.appendChild(empty);
-    }
-
+    for (let p = 0; p < firstDow; p++) { const empty = document.createElement('div'); empty.className = 'day-cell empty'; daysWrap.appendChild(empty); }
     const days = daysInMonth(m);
     for (let d = 1; d <= days; d++) {
       const doy = dayOfYear(m, d);
       const az = sunriseAzimuth(doy, lat);
       const cell = document.createElement('div');
       cell.className = 'day-cell';
-
       let horizAngle = null, delay = 0;
-      if (az === null) {
-        cell.classList.add('no-sunrise');
-      } else {
-        horizAngle = getHorizonAngleAtAzimuth(profile, az);
-        delay = delayMinutes(horizAngle, doy, lat);
-        if (delay < 5) cell.classList.add('clear');
-        else if (delay < 15) cell.classList.add('short-delay');
-        else if (delay < 30) cell.classList.add('medium-delay');
-        else cell.classList.add('long-delay');
-      }
-
-      cell.addEventListener('mouseenter', (e) => {
+      if (az === null) { cell.classList.add('no-sunrise'); }
+      else { horizAngle = getHorizonAngleAtAzimuth(profile, az); delay = delayMinutes(horizAngle, doy, lat); if (delay < 5) cell.classList.add('clear'); else if (delay < 15) cell.classList.add('short-delay'); else if (delay < 30) cell.classList.add('medium-delay'); else cell.classList.add('long-delay'); }
+      cell.addEventListener('mouseenter', e => {
         const tip = document.getElementById('tooltip');
         let html = '<strong>' + MONTH_NAMES[m] + ' ' + d + '</strong><br>';
-        if (az === null) {
-          html += 'No sunrise (polar night)';
-        } else {
-          html += 'Azimuth: ' + az.toFixed(1) + '\u00B0<br>';
-          html += 'Terrain angle: ' + horizAngle.toFixed(2) + '\u00B0<br>';
-          if (delay < 1) {
-            html += '<span style="color:var(--gold)">Sun visible at sunrise</span>';
-          } else {
-            html += 'Sun clears terrain <strong>' + Math.round(delay) + ' min</strong> after sunrise<br>';
-            if (delay < 15) html += '<span style="color:var(--gold)">Short wait</span>';
-            else if (delay < 30) html += '<span style="color:#b85c1a">Moderate wait</span>';
-            else html += '<span style="color:var(--red)">Long wait (' + Math.round(delay) + ' min)</span>';
-          }
-        }
-        tip.innerHTML = html;
-        tip.style.display = 'block';
-        tip.style.left = (e.clientX + 12) + 'px';
-        tip.style.top = (e.clientY - 10) + 'px';
+        if (az === null) { html += 'No sunrise (polar night)'; }
+        else { html += 'Azimuth: ' + az.toFixed(1) + '\u00B0<br>Terrain angle: ' + horizAngle.toFixed(2) + '\u00B0<br>'; if (delay < 1) html += '<span style="color:var(--gold)">Sun visible at sunrise</span>'; else { html += 'Sun clears terrain <strong>' + Math.round(delay) + ' min</strong> after sunrise<br>'; if (delay < 15) html += '<span style="color:var(--gold)">Short wait</span>'; else if (delay < 30) html += '<span style="color:#b85c1a">Moderate wait</span>'; else html += '<span style="color:var(--red)">Long wait (' + Math.round(delay) + ' min)</span>'; } }
+        tip.innerHTML = html; tip.style.display = 'block'; tip.style.left = (e.clientX + 12) + 'px'; tip.style.top = (e.clientY - 10) + 'px';
       });
-
-      cell.addEventListener('mousemove', (e) => {
-        const tip = document.getElementById('tooltip');
-        tip.style.left = (e.clientX + 12) + 'px';
-        tip.style.top = (e.clientY - 10) + 'px';
-      });
-
-      cell.addEventListener('mouseleave', () => {
-        document.getElementById('tooltip').style.display = 'none';
-      });
-
+      cell.addEventListener('mousemove', e => { const tip = document.getElementById('tooltip'); tip.style.left = (e.clientX + 12) + 'px'; tip.style.top = (e.clientY - 10) + 'px'; });
+      cell.addEventListener('mouseleave', () => { document.getElementById('tooltip').style.display = 'none'; });
       daysWrap.appendChild(cell);
     }
     block.appendChild(daysWrap);
@@ -745,9 +1344,7 @@ function renderCalendar(lat, profile) {
 }
 
 function renderSummary(lat, profile) {
-  const card = document.getElementById('summary-card');
-  card.style.display = 'block';
-
+  document.getElementById('summary-card').style.display = 'block';
   let clearDays = 0, shortDays = 0, medDays = 0, longDays = 0, noSunrise = 0;
   let totalDelay = 0, sunriseDays = 0, minDelay = 999, maxDelay = 0;
   for (let d = 1; d <= 365; d++) {
@@ -755,64 +1352,145 @@ function renderSummary(lat, profile) {
     if (az === null) { noSunrise++; continue; }
     const ha = getHorizonAngleAtAzimuth(profile, az);
     const dl = delayMinutes(ha, d, lat);
-    sunriseDays++;
-    totalDelay += dl;
-    minDelay = Math.min(minDelay, dl);
-    maxDelay = Math.max(maxDelay, dl);
-    if (dl < 5) clearDays++;
-    else if (dl < 15) shortDays++;
-    else if (dl < 30) medDays++;
-    else longDays++;
+    sunriseDays++; totalDelay += dl; minDelay = Math.min(minDelay, dl); maxDelay = Math.max(maxDelay, dl);
+    if (dl < 5) clearDays++; else if (dl < 15) shortDays++; else if (dl < 30) medDays++; else longDays++;
   }
-
   const avgDelay = sunriseDays > 0 ? (totalDelay / sunriseDays) : 0;
   document.getElementById('summary-content').innerHTML =
     '<div style="display:flex;gap:2rem;flex-wrap:wrap;font-size:0.95rem;">' +
-      '<div><span style="color:var(--gold);font-size:1.8rem;font-family:Playfair Display,serif;font-weight:700;">' + Math.round(avgDelay) + ' min</span><br><span style="color:var(--text-dim)">avg delay after sunrise</span></div>' +
-      '<div><span style="color:var(--gold);font-size:1.4rem;font-weight:700;">' + Math.round(minDelay) + '–' + Math.round(maxDelay) + ' min</span><br><span style="color:var(--text-dim)">delay range</span></div>' +
-      '<div><span style="color:var(--gold);font-size:1.4rem;font-weight:700;">' + clearDays + '</span><br><span style="color:var(--text-dim)">clear days (&lt;5m)</span></div>' +
-      '<div><span style="color:#c87a20;font-size:1.4rem;font-weight:700;">' + shortDays + '</span><br><span style="color:var(--text-dim)">short delay (5–15m)</span></div>' +
-      '<div><span style="color:#b85c1a;font-size:1.4rem;font-weight:700;">' + medDays + '</span><br><span style="color:var(--text-dim)">medium (15–30m)</span></div>' +
-      '<div><span style="color:var(--red);font-size:1.4rem;font-weight:700;">' + longDays + '</span><br><span style="color:var(--text-dim)">long delay (&gt;30m)</span></div>' +
-      (noSunrise > 0 ? '<div><span style="color:var(--gray);font-size:1.4rem;font-weight:700;">' + noSunrise + '</span><br><span style="color:var(--text-dim)">no sunrise</span></div>' : '') +
+    '<div><span style="color:var(--gold);font-size:1.8rem;font-family:Playfair Display,serif;font-weight:700;">' + Math.round(avgDelay) + ' min</span><br><span style="color:var(--text-dim)">avg delay</span></div>' +
+    '<div><span style="color:var(--gold);font-size:1.4rem;font-weight:700;">' + Math.round(minDelay) + '\u2013' + Math.round(maxDelay) + ' min</span><br><span style="color:var(--text-dim)">range</span></div>' +
+    '<div><span style="color:var(--gold);font-size:1.4rem;font-weight:700;">' + clearDays + '</span><br><span style="color:var(--text-dim)">clear (&lt;5m)</span></div>' +
+    '<div><span style="color:#c87a20;font-size:1.4rem;font-weight:700;">' + shortDays + '</span><br><span style="color:var(--text-dim)">short (5\u201315m)</span></div>' +
+    '<div><span style="color:#b85c1a;font-size:1.4rem;font-weight:700;">' + medDays + '</span><br><span style="color:var(--text-dim)">medium (15\u201330m)</span></div>' +
+    '<div><span style="color:var(--red);font-size:1.4rem;font-weight:700;">' + longDays + '</span><br><span style="color:var(--text-dim)">long (&gt;30m)</span></div>' +
+    (noSunrise > 0 ? '<div><span style="color:var(--gray);font-size:1.4rem;font-weight:700;">' + noSunrise + '</span><br><span style="color:var(--text-dim)">no sunrise</span></div>' : '') +
     '</div>';
 }
 
 async function runAnalysis(lat, lng) {
-  ['azimuth-loading', 'horizon-loading', 'calendar-loading'].forEach(id => {
-    document.getElementById(id).classList.add('active');
-  });
-
+  ['azimuth-loading','horizon-loading','calendar-loading'].forEach(id => document.getElementById(id).classList.add('active'));
   renderAzimuthChart(lat);
   document.getElementById('azimuth-loading').classList.remove('active');
-
   let minAz = 360, maxAz = 0;
-  for (let d = 1; d <= 365; d++) {
-    const az = sunriseAzimuth(d, lat);
-    if (az !== null) {
-      minAz = Math.min(minAz, az);
-      maxAz = Math.max(maxAz, az);
-    }
-  }
+  for (let d = 1; d <= 365; d++) { const az = sunriseAzimuth(d, lat); if (az !== null) { minAz = Math.min(minAz, az); maxAz = Math.max(maxAz, az); } }
   if (minAz > maxAz) { minAz = null; maxAz = null; }
-
   try {
     const { profile } = await getHorizonProfile(lat, lng);
-
+    state.horizonProfile = profile;
     document.getElementById('horizon-loading').classList.remove('active');
     renderHorizonChart(profile, minAz, maxAz);
-
     document.getElementById('calendar-loading').classList.remove('active');
     renderCalendar(lat, profile);
     renderSummary(lat, profile);
   } catch (err) {
     console.error('Analysis error:', err);
-    ['horizon-loading', 'calendar-loading'].forEach(id => {
-      document.getElementById(id).classList.remove('active');
-    });
+    ['horizon-loading','calendar-loading'].forEach(id => document.getElementById(id).classList.remove('active'));
     document.getElementById('horizon-placeholder').style.display = 'flex';
     document.getElementById('horizon-placeholder').textContent = 'Error fetching elevation data. Try again.';
   }
+}
+
+function initAnalysis() {
+  analysisMap = L.map('analysis-map').setView([48.85, 2.35], 4);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '\u00A9 OpenStreetMap contributors', maxZoom: 18 }).addTo(analysisMap);
+  const latIn = document.getElementById('lat-input');
+  const lngIn = document.getElementById('lng-input');
+
+  function setAnalysisLocation(lat, lng) {
+    lat = parseFloat(lat); lng = parseFloat(lng);
+    if (isNaN(lat) || isNaN(lng)) return;
+    latIn.value = lat.toFixed(4); lngIn.value = lng.toFixed(4);
+    if (analysisMarker) analysisMarker.setLatLng([lat, lng]);
+    else analysisMarker = L.marker([lat, lng]).addTo(analysisMap);
+    analysisMap.setView([lat, lng], Math.max(analysisMap.getZoom(), 10));
+    runAnalysis(lat, lng);
+    state.lat = lat; state.lng = lng;
+    document.getElementById('sun-lat').value = lat.toFixed(4);
+    document.getElementById('sun-lng').value = lng.toFixed(4);
+    updateSunData();
+  }
+
+  analysisMap.on('click', e => setAnalysisLocation(e.latlng.lat, e.latlng.lng));
+  document.getElementById('analysis-go-btn').addEventListener('click', () => setAnalysisLocation(latIn.value, lngIn.value));
+
+  if (state.lat !== null) {
+    latIn.value = state.lat.toFixed(4);
+    lngIn.value = state.lng.toFixed(4);
+    setAnalysisLocation(state.lat, state.lng);
+  }
+
+  setTimeout(() => analysisMap.invalidateSize(), 100);
+}
+
+// ===================================================================
+// CANVAS SIZING
+// ===================================================================
+
+function resizeCanvas() {
+  const container = document.getElementById('sun-view');
+  const dpr = window.devicePixelRatio || 1;
+  const w = container.clientWidth;
+  const h = container.clientHeight;
+
+  const pc = document.getElementById('panorama-canvas');
+  pc.width = w * dpr;
+  pc.height = h * dpr;
+  pc.style.width = w + 'px';
+  pc.style.height = h + 'px';
+
+  const cc = document.getElementById('compass-canvas');
+  cc.width = w * dpr;
+  cc.height = 28 * dpr;
+  cc.style.width = w + 'px';
+  cc.style.height = '28px';
+
+  state.canvasW = w;
+  state.canvasH = h;
+  state.dpr = dpr;
+}
+
+// ===================================================================
+// ANIMATION LOOP
+// ===================================================================
+
+function animate() {
+  if (state.mode === 'sun') {
+    if (state.useCurrentTime) {
+      const now = new Date();
+      state.selectedMinute = now.getHours() * 60 + now.getMinutes() + now.getSeconds() / 60;
+      document.getElementById('time-slider').value = Math.round(state.selectedMinute);
+      document.getElementById('time-display').textContent = minuteToTimeStr(state.selectedMinute);
+      const todayStr = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0') + '-' + String(now.getDate()).padStart(2, '0');
+      const dp = document.getElementById('date-picker');
+      if (dp.value !== todayStr) { dp.value = todayStr; state.selectedDate = now; updateSunData(); }
+    }
+
+    if (state.cameraActive) {
+      renderCameraOverlay();
+    } else {
+      renderPanorama();
+    }
+    renderCompassStrip();
+
+    document.getElementById('heading-display').textContent =
+      Math.round(state.viewHeading) + '\u00B0 ' + azimuthToCompass(state.viewHeading);
+  }
+  requestAnimationFrame(animate);
+}
+
+// ===================================================================
+// INITIALIZATION
+// ===================================================================
+
+window.addEventListener('resize', () => { if (state.mode === 'sun') resizeCanvas(); });
+initControls();
+initPanning();
+resizeCanvas();
+animate();
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 </script>
 </body>
