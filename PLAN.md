@@ -150,11 +150,12 @@ Output: { screenX, screenY, visible }
 ---
 
 ## Progress Tracker
-- [ ] Step 1: Restructure HTML — Mode Switcher
-- [ ] Step 2: Full Sun Position Algorithm
-- [ ] Step 3: Interactive Panoramic Sky View
-- [ ] Step 4: Date/Time Controls
-- [ ] Step 5: Location Controls + GPS
-- [ ] Step 6: Camera AR Overlay
-- [ ] Step 7: Polish & Integration
-- [ ] Step 8: Git — Commit & Push
+- [x] Step 1: Restructure HTML — Mode Switcher
+- [x] Step 2: Full Sun Position Algorithm
+- [x] Step 3: Interactive Panoramic Sky View
+- [x] Step 4: Date/Time Controls
+- [x] Step 5: Location Controls + GPS
+- [x] Step 6: Camera AR Overlay
+- [x] Step 7: Existing Analysis (preserved)
+- [x] Step 8: PWA (manifest.json, sw.js)
+- [x] Step 9: Git — Commit & Push
